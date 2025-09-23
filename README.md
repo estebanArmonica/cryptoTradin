@@ -1,4 +1,4 @@
-## Crypto Trading 🌱
+## Crypto Trading 🌱💻
 
 Este es un proyecto de una página web en el cual podra realizar compra y venta de criptomonedas
 con la API de coingecko
