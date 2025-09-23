@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8400:8400"
+    volumes:
+      - ./src:/app
+    environment:
+      - PYTHONPATH=/app
+      - DEBUG=1
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8400 --reload
+    restart: unless-stopped
+
+  # Agrega otros servicios si necesitas (Redis, PostgreSQL, etc.)

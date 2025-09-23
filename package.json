@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "@proton/vert": "^0.3.24",
+    "@proton/web-sdk": "^4.2.20",
+    "axios": "^1.12.2"
+  }
+}

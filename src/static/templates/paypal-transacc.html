@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transferencia de ganancias a Paypal - Crypto Update</title>
+    <link rel="icon" href="https://images.vexels.com/media/users/3/263037/isolated/preview/e99af4cc856407924934f9cbc0445b27-icono-de-dinero-de-criptomoneda-bitcoin.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/paypal-transacc.css') }}">
+
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>Transferencia de Ganancias a PayPal</h1>
+            <p>Convierte tus ganancias de criptomonedas a dinero fiat y transfiere a tu cuenta PayPal</p>
+        </header>
+
+        <div class="content">
+            <div class="form-container">
+                <!-- Sección para mostrar ganancias retirables -->
+                <div class="withdrawable-info">
+                    <h3>GANANCIAS RETIRABLES DISPONIBLES</h3>
+                    <div class="withdrawable-amount" id="withdrawable-amount">Cargando...</div>
+                    <p>Disponibles para retiro inmediato</p>
+                </div>
+
+                <form id="transferForm">
+                    <div class="form-group">
+                        <label for="amount">Monto a Transferir (USD)</label>
+                        <div class="amount-container">
+                            <div class="input-with-icon" style="flex: 1;">
+                                <i class="fas fa-dollar-sign"></i>
+                                <input type="number" id="amount" class="amount-input" placeholder="0.00" step="0.01"
+                                    min="10" required>
+                            </div>
+                        </div>
+                        <small id="amount-help" class="form-text">Mínimo $10.00 - Máximo $5,000.00</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="paypalEmail">Correo de PayPal</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-envelope"></i>
+                            <input type="email" id="paypalEmail" placeholder="tu.email@ejemplo.com" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="paypalName">Nombre asociado a tu PayPal</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-user"></i>
+                            <input type="text" id="paypalName" placeholder="Nombre y apellido" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="password">Contraseña de Seguridad</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-lock"></i>
+                            <input type="password" id="password" placeholder="Ingresa tu contraseña" required
+                                autocomplete="current-password">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn pulse">
+                        <i class="fas fa-paper-plane"></i> Transferir Fondos
+                    </button>
+                </form>
+            </div>
+
+            <div class="info-container">
+                <div class="info-item">
+                    <i class="fas fa-shield-alt"></i>
+                    <div>
+                        <h3>Transferencia Segura</h3>
+                        <p>Todas las transacciones están encriptadas y protegidas con autenticación de dos factores.</p>
+                    </div>
+                </div>
+
+                <div class="info-item">
+                    <i class="fas fa-bolt"></i>
+                    <div>
+                        <h3>Procesamiento Rápido</h3>
+                        <p>Las transferencias a PayPal se completan en un plazo de 24 a 48 horas hábiles.</p>
+                    </div>
+                </div>
+
+                <div class="info-item">
+                    <i class="fas fa-percentage"></i>
+                    <div>
+                        <h3>Tarifas Transparentes</h3>
+                        <p>Solo 1.5% de comisión por transacción, sin cargos ocultos.</p>
+                    </div>
+                </div>
+
+                <div class="conversion-rate">
+                    <h3>Tipo de Cambio Actual</h3>
+                    <div class="rate-value">1 BTC = $36,500.00 USD</div>
+                    <p>Actualizado hace 5 minutos</p>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>© 2025 Plataforma de Criptomonedas. Todas las transacciones están sujetas a nuestros términos y
+                condiciones.</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', path='/js/Paypal-transacc.js') }}"></script>
+</body>
+
+</html>

@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wallet - Crypto Trading Platform</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="/static/css/styles.css" rel="stylesheet">
+    <style>
+        .wallet-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        }
+        .proton-connect-btn {
+            background: linear-gradient(135deg, #00D3FF 0%, #7C4DFF 100%);
+            border: none;
+            border-radius: 25px;
+            padding: 12px 30px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        .proton-connect-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,211,255,0.3);
+        }
+        .balance-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            margin-bottom: 20px;
+        }
+        .token-card {
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+        }
+        .token-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .transfer-form {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        }
+        .connected-badge {
+            background: #28a745;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .proton-logo {
+            width: 40px;
+            height: 40px;
+            margin-right: 10px;
+        }
+        .token-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        .portfolio-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #28a745;
+        }
+        .account-info-box {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 10px;
+            padding: 15px;
+            border-left: 4px solid #007bff;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/dashboard">
+                <i class="fas fa-chart-line"></i>
+                Crypto Trading Platform
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/dashboard"><i class="fas fa-home"></i> Dashboard</a>
+                <a class="nav-link" href="/trading"><i class="fas fa-exchange-alt"></i> Trading</a>
+                <a class="nav-link active" href="/wallet"><i class="fas fa-wallet"></i> Wallet</a>
+                <a class="nav-link" href="/profile"><i class="fas fa-user"></i> Perfil</a>
+                <a class="nav-link" href="#" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2><i class="fas fa-wallet me-2"></i>Mi Wallet</h2>
+                    <span id="connectionStatus" class="connected-badge" style="display: none;">
+                        <i class="fas fa-check-circle"></i> Conectado a Proton
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Proton Wallet Connection -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="wallet-card">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <h4><img src="/static/images/proton-logo.png" alt="Proton" class="proton-logo"> Proton Wallet</h4>
+                            <p class="mb-3">Conecta tu wallet de Proton para gestionar tus criptoactivos de forma segura</p>
+                            
+                            <div class="row g-2">
+                                <div class="col-md-8">
+                                    <input type="text" class="form-control" id="accountNameInput" 
+                                           placeholder="Ingresa tu nombre de cuenta de Proton" 
+                                           pattern="[a-z1-5.]{1,12}" 
+                                           title="Nombre de cuenta Proton (1-12 caracteres, a-z, 1-5, .)">
+                                </div>
+                                <div class="col-md-4">
+                                    <button id="connectProtonBtn" class="btn proton-connect-btn w-100" onclick="connectProtonWallet()">
+                                        <i class="fas fa-plug"></i> Conectar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <div class="account-info-box">
+                                <h5 class="portfolio-value" id="totalPortfolioValue">$0.00 USD</h5>
+                                <p class="mb-0 text-muted">Valor total del portfolio</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Connected Account Info -->
+        <div class="row mb-4" id="accountInfo" style="display: none;">
+            <div class="col-12">
+                <div class="balance-card">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5><i class="fas fa-user-circle me-2"></i>Información de Cuenta</h5>
+                        <div>
+                            <button class="btn btn-sm btn-outline-info me-2" onclick="showProtonAccountInfo()">
+                                <i class="fas fa-info-circle"></i> Detalles
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="disconnectProtonWallet()">
+                                <i class="fas fa-power-off"></i> Desconectar
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-md-4">
+                            <p><strong>Nombre de cuenta:</strong><br>
+                            <span id="accountName" class="text-primary">-</span></p>
+                        </div>
+                        <div class="col-md-4">
+                            <p><strong>Balance XPR:</strong><br>
+                            <span id="totalBalance" class="text-success">-</span></p>
+                        </div>
+                        <div class="col-md-4">
+                            <p><strong>Última actualización:</strong><br>
+                            <span id="lastUpdate">-</span></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Balances y Tokens -->
+            <div class="col-lg-8">
+                <div class="balance-card">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5><i class="fas fa-coins me-2"></i>Mis Tokens</h5>
+                        <div>
+                            <button class="btn btn-sm btn-outline-primary me-2" onclick="loadProtonTokens()">
+                                <i class="fas fa-sync-alt"></i> Actualizar
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="loadSupportedTokens()">
+                                <i class="fas fa-list"></i> Tokens Soportados
+                            </button>
+                        </div>
+                    </div>
+                    <div id="tokensList">
+                        <div class="text-center py-4">
+                            <i class="fas fa-coins fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">Conecta tu wallet de Proton para ver tus tokens</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Transfer Form -->
+            <div class="col-lg-4">
+                <div class="transfer-form">
+                    <h5><i class="fas fa-paper-plane me-2"></i>Transferir Fondos</h5>
+                    <form id="transferForm">
+                        <div class="mb-3">
+                            <label class="form-label">Desde Cuenta *</label>
+                            <input type="text" class="form-control" id="fromAccount" 
+                                   placeholder="tu.cuenta.proton" required
+                                   pattern="[a-z1-5.]{1,12}">
+                            <div class="form-text">Tu nombre de cuenta de Proton</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Hacia Cuenta *</label>
+                            <input type="text" class="form-control" id="toAccount" 
+                                   placeholder="destino.proton" required
+                                   pattern="[a-z1-5.]{1,12}">
+                            <div class="form-text">Cuenta destino de Proton</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Contrato del Token *</label>
+                            <select class="form-select" id="transferContract" required>
+                                <option value="">Seleccionar contrato...</option>
+                                <option value="eosio.token" selected>eosio.token (XPR)</option>
+                                <option value="tokens.proton">tokens.proton (Tokens wrapped)</option>
+                                <option value="usdt.proton">usdt.proton (USDT)</option>
+                                <option value="btc.proton">btc.proton (BTC)</option>
+                                <option value="eth.proton">eth.proton (ETH)</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Símbolo del Token *</label>
+                            <select class="form-select" id="transferSymbol" required>
+                                <option value="">Seleccionar token...</option>
+                                <option value="XPR" selected>XPR (Proton)</option>
+                                <option value="XUSDT">XUSDT (Tether Wrapped)</option>
+                                <option value="XBTC">XBTC (Bitcoin Wrapped)</option>
+                                <option value="XETH">XETH (Ethereum Wrapped)</option>
+                                <option value="USDT">USDT (Tether)</option>
+                                <option value="BTC">BTC (Bitcoin)</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Cantidad *</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="transferAmount" 
+                                       step="0.0001" min="0.0001" placeholder="0.0000" required>
+                                <span class="input-group-text" id="tokenSymbolDisplay">XPR</span>
+                            </div>
+                            <div class="form-text">Formato: 10.0000 XPR</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Memo (Opcional)</label>
+                            <textarea class="form-control" id="transferMemo" rows="2" 
+                                      placeholder="Mensaje para la transacción (máx. 256 caracteres)"
+                                      maxlength="256"></textarea>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-paper-plane"></i> Crear Transacción
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="balance-card mt-3">
+                    <h6><i class="fas fa-bolt me-2"></i>Acciones Rápidas</h6>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-outline-success" onclick="protonWallet.loadAccountData()">
+                            <i class="fas fa-sync"></i> Actualizar Todo
+                        </button>
+                        <button class="btn btn-outline-info" onclick="loadProtonTokens()">
+                            <i class="fas fa-coins"></i> Ver Tokens
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Transaction History -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="balance-card">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5><i class="fas fa-history me-2"></i>Últimas Transacciones</h5>
+                        <button class="btn btn-sm btn-outline-secondary">
+                            <i class="fas fa-external-link-alt"></i> Ver en Explorer
+                        </button>
+                    </div>
+                    <div id="transactionHistory" class="mt-3">
+                        <div class="text-center py-4">
+                            <i class="fas fa-receipt fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">No hay transacciones recientes</p>
+                            <small class="text-muted">Las transacciones aparecerán aquí después de realizarlas</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Modal -->
+    <div class="modal fade" id="loadingModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body text-center py-4">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <h5 id="loadingMessage">Procesando...</h5>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Account Info Modal -->
+    <div class="modal fade" id="accountInfoModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-info-circle me-2"></i>Información de Cuenta Proton</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="accountInfoModalBody">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Cargando información...</span>
+                        </div>
+                        <p class="mt-3">Cargando información de la cuenta...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transaction Modal -->
+    <div class="modal fade" id="transactionModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-receipt me-2"></i>Detalles de Transacción</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="transactionModalBody">
+                    <!-- Contenido dinámico -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-primary" onclick="protonWallet.loadAccountData()">
+                        <i class="fas fa-sync"></i> Actualizar Saldos
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/proton-wallet.js"></script>
+    <script src="/static/js/auth.js"></script>
+
+    <script>
+        // Actualizar símbolo del token cuando se cambia
+        document.getElementById('transferSymbol').addEventListener('change', function() {
+            document.getElementById('tokenSymbolDisplay').textContent = this.value;
+        });
+
+        // Actualizar contrato cuando se cambia el símbolo y viceversa
+        document.getElementById('transferSymbol').addEventListener('change', updateContractFromSymbol);
+        document.getElementById('transferContract').addEventListener('change', updateSymbolFromContract);
+
+        function updateContractFromSymbol() {
+            const symbol = document.getElementById('transferSymbol').value;
+            const contractSelect = document.getElementById('transferContract');
+            
+            // Mapeo simple de símbolos a contratos
+            const symbolToContract = {
+                'XPR': 'eosio.token',
+                'XUSDT': 'tokens.proton',
+                'XBTC': 'tokens.proton',
+                'XETH': 'tokens.proton',
+                'USDT': 'usdt.proton',
+                'BTC': 'btc.proton',
+                'ETH': 'eth.proton'
+            };
+            
+            if (symbolToContract[symbol]) {
+                contractSelect.value = symbolToContract[symbol];
+            }
+        }
+
+        function updateSymbolFromContract() {
+            const contract = document.getElementById('transferContract').value;
+            const symbolSelect = document.getElementById('transferSymbol');
+            
+            // Mapeo simple de contratos a símbolos principales
+            const contractToSymbol = {
+                'eosio.token': 'XPR',
+                'tokens.proton': 'XUSDT',
+                'usdt.proton': 'USDT',
+                'btc.proton': 'BTC',
+                'eth.proton': 'ETH'
+            };
+            
+            if (contractToSymbol[contract]) {
+                symbolSelect.value = contractToSymbol[contract];
+                document.getElementById('tokenSymbolDisplay').textContent = contractToSymbol[contract];
+            }
+        }
+
+        // Auto-completar desde cuenta cuando está conectado
+        document.addEventListener('DOMContentLoaded', function() {
+            const fromAccountInput = document.getElementById('fromAccount');
+            const accountNameInput = document.getElementById('accountNameInput');
+            
+            // Sincronizar inputs
+            if (accountNameInput && fromAccountInput) {
+                accountNameInput.addEventListener('input', function() {
+                    fromAccountInput.value = this.value;
+                });
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,358 @@
+Crypto Trading Platform
+ 2.0.0 
+OAS 3.1
+/api/v1/openapi.json
+Plataforma avanzada de trading de criptomonedas con procesamiento de pagos
+
+Status
+
+
+GET
+/api/v1/status
+Get Status
+
+
+GET
+/api/v1/
+Read Root
+
+
+GET
+/api/v1/ping
+Get Ping
+
+
+GET
+/api/health
+Health Check
+
+CoinGecko
+
+
+GET
+/api/v1/
+Read Root
+
+
+GET
+/api/v1/ping
+Get Ping
+
+
+GET
+/api/v1/categories
+Get Coin Categories
+
+
+GET
+/api/v1/prices
+Get Prices
+
+
+GET
+/api/v1/coins/list
+Get Coin List
+
+
+GET
+/api/v1/coins/markets
+Get Coin Market
+
+
+GET
+/api/v1/global
+Get Global Datas
+
+
+GET
+/api/v1/decentralized
+Get Decentralized Finance
+
+
+GET
+/api/v1/companies/{coin_id}
+Get Companies By Coin Ids
+
+
+GET
+/api/v1/search
+Search Coins
+
+Cryptocurrencies
+
+
+GET
+/api/v1/categories
+Get Coin Categories
+
+
+GET
+/api/v1/prices
+Get Prices
+
+
+GET
+/api/v1/coins/list
+Get Coin List
+
+
+GET
+/api/v1/coins/markets
+Get Coin Market
+
+
+GET
+/api/v1/search
+Search Coins
+
+Market
+
+
+GET
+/api/v1/global
+Get Global Datas
+
+
+GET
+/api/v1/decentralized
+Get Decentralized Finance
+
+Companies
+
+
+GET
+/api/v1/companies/{coin_id}
+Get Companies By Coin Ids
+
+Dashboard
+
+
+GET
+/api/v1/global-metrics
+Get Global Metrics
+
+
+GET
+/api/v1/analysis/{coin_id}
+Get Coin Analysis
+
+
+POST
+/api/v1/filter
+Filter Coins
+
+
+GET
+/api/v1/top-opportunities
+Get Top Opportunities
+
+
+GET
+/api/v1/market/performance
+Get Market Performance
+
+
+GET
+/api/v1/coins/top-gainers
+Get Top Gainers
+
+
+GET
+/api/v1/coins/top-losers
+Get Top Losers
+
+
+GET
+/api/v1/coins/trending
+Get Trending Coins
+
+Payments
+
+
+POST
+/api/braintree/payout
+Create Paypal Payout
+
+
+GET
+/api/braintree/payout-status/{payout_batch_id}
+Get Payout Status
+
+
+POST
+/api/braintree/client-token
+Generate Client Token
+
+
+POST
+/api/braintree/process-payment
+Process Payment
+
+
+POST
+/api/braintree/withdraw
+Withdraw To Bank
+
+payments
+
+
+POST
+/api/braintree/payout
+Create Paypal Payout
+
+
+GET
+/api/braintree/payout-status/{payout_batch_id}
+Get Payout Status
+
+
+POST
+/api/braintree/client-token
+Generate Client Token
+
+
+POST
+/api/braintree/process-payment
+Process Payment
+
+
+POST
+/api/braintree/withdraw
+Withdraw To Bank
+
+
+default
+
+
+POST
+/api/notifications/ema-alert
+Send Ema Alert Notification
+
+
+POST
+/api/notifications/settings
+Save Notification Settings
+
+
+POST
+/api/register
+Register User
+
+
+POST
+/api/login
+Login User
+
+
+POST
+/api/verify-code
+Verify Code
+
+
+POST
+/api/logout
+Logout User
+
+
+GET
+/api/user/balance
+Get Balance
+
+
+GET
+/
+Login Page
+
+
+GET
+/register
+Register Page
+
+
+GET
+/trading
+Trading Page
+
+
+GET
+/paypal-transacc
+Paypal Transaction Page
+
+
+GET
+/dashboard
+Dashboard
+
+
+GET
+/wallet
+Wallet Page
+
+
+GET
+/profile
+Profile Page
+
+
+POST
+/api/user/profile/update
+Update User Profile
+
+
+GET
+/simulacion
+Trading Simulation
+
+
+POST
+/api/paypal/buy-crypto
+Buy Crypto With Paypal
+
+
+GET
+/api/user/crypto-balance/{coin_id}
+Get Crypto Balance
+
+
+GET
+/api/user/crypto-balances
+Get All Crypto Balances
+
+Trading
+
+
+GET
+/api/v1/trading/test
+Trading Test
+
+
+GET
+/api/v1/trading/coins/available
+Get Available Coins
+
+
+GET
+/api/v1/trading/{coin_id}/price
+Get Current Price
+
+
+GET
+/api/v1/trading/{coin_id}/signals
+Get Trading Signals
+
+
+GET
+/api/v1/trading/{coin_id}/metrics
+Get Trading Metrics
+
+
+GET
+/api/v1/trading/{coin_id}/calculate
+Calculate Crypto Value
+
+Info
+
+
+GET
+/api
+Api Info

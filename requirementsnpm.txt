@@ -1,0 +1,3 @@
+npm install @proton/web-sdk
+npm install @proton/vert
+npm install axios   

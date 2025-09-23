@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plataforma de Trading con Retiros PayPal</title>
+    <link rel="icon" href="https://images.vexels.com/media/users/3/263037/isolated/preview/e99af4cc856407924934f9cbc0445b27-icono-de-dinero-de-criptomoneda-bitcoin.png">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/trading.css') }}">
+    <!-- SDK de PayPal con client-id REAL -->
+    <script src="https://www.paypal.com/sdk/js?client-id=Ac6Xq9PVNP7ftJwPWrgAGxeFu17BYlCJ6YaUc6oDeEHDr_WoWAFbzvMa1LlBeWAUip1GZZZRzrTWs6Xl&components=buttons,hosted-fields&currency=USD"></script>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">Análisis de compras de crypto Update</div>
+            <div class="pair-info">
+                <div class="pair-name" id="pair-name">BTC/USDT</div>
+                <div class="pair-price" id="current-price">$0.00</div>
+                <div class="pair-change" id="price-change">+0.00%</div>
+            </div>
+            <div class="header-actions">
+                <!--<button class="nav-btn" onclick="resetSimulation()">
+                    <i class="fas fa-sync-alt me-2"></i>Reiniciar Simulación
+                </button>-->
+                <!--<button class="nav-btn" data-bs-toggle="modal" data-bs-target="#buyCryptoModal">
+                    <i class="fas fa-plus-circle me-2"></i>Comprar Cripto
+                </button>-->
+            </div>
+        </header>
+
+        <div class="crypto-selector">
+            <label for="crypto-select">Seleccionar Criptomoneda:</label>
+            <select id="crypto-select" class="form-select">
+                <option value="bitcoin">Bitcoin (BTC)</option>
+                <option value="ethereum">Ethereum (ETH)</option>
+                <option value="solana">Solana (SOL)</option>
+                <option value="binancecoin">BNB (BNB)</option>
+                <option value="cardano">Cardano (ADA)</option>
+            </select>
+        </div>
+
+        <div class="main-content">
+            <div class="left-panel">
+                <div class="balance-panel">
+                    <div class="panel-title">Balance de Cuenta</div>
+                    <div class="balance-grid">
+                        <div class="balance-card">
+                            <div class="balance-card-title">Balance en USDT</div>
+                            <div class="balance-card-value" id="balance-usdt">$10,000.00</div>
+                            <div class="balance-card-change" id="usdt-change">+0.00%</div>
+                        </div>
+                        <div class="balance-card">
+                            <div class="balance-card-title">Balance en Cripto</div>
+                            <div class="balance-card-value" id="balance-crypto">0.000000 BTC</div>
+                            <div class="balance-card-change" id="crypto-change">+0.00%</div>
+                        </div>
+                    </div>
+
+                    <!-- Nueva sección para separar ganancias y pérdidas -->
+                    <div class="profit-loss-section">
+                        <div class="profit-card">
+                            <div class="profit-title">GANANCIAS TOTALES</div>
+                            <div class="profit-amount" id="total-profit">+$0.00</div>
+                            <div class="profit-percent" id="profit-percent">+0.00%</div>
+                        </div>
+                        <div class="loss-card">
+                            <div class="loss-title">PÉRDIDAS TOTALES</div>
+                            <div class="loss-amount" id="total-loss">-$0.00</div>
+                            <div class="loss-percent" id="loss-percent">-0.00%</div>
+                        </div>
+                    </div>
+
+                    <div class="summary-panel">
+                        <div class="summary-item">
+                            <span class="summary-label">Valor Total de la Cuenta:</span>
+                            <span class="summary-value" id="total-value">$10,000.00</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Inversión Inicial:</span>
+                            <span class="summary-value">$10,000.00</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Resultado Neto:</span>
+                            <span class="summary-value" id="net-result">$0.00</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Comisiones Pagadas:</span>
+                            <span class="summary-value" id="total-fees">$0.00</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Ganancias Retirables:</span>
+                            <span class="summary-value positive" id="withdrawable-profit">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <div class="chart-title">Gr&aacute;fico de Precios en Tiempo Real</div>
+                        <div class="chart-controls">
+                            <button class="control-btn active">1H</button>
+                            <button class="control-btn">4H</button>
+                            <button class="control-btn">1D</button>
+                            <button class="control-btn">1S</button>
+                        </div>
+                    </div>
+                    <canvas id="priceChart"></canvas>
+                </div>
+
+                <div class="order-book">
+                    <div class="order-section">
+                        <div class="section-title">Órdenes de Compra</div>
+                        <table class="order-table">
+                            <thead>
+                                <tr>
+                                    <th>Precio (USDT)</th>
+                                    <th>Cantidad</th>
+                                    <th>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="buy-orders">
+                                <tr>
+                                    <td colspan="3" class="loading">Cargando órdenes...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="order-section">
+                        <div class="section-title">Órdenes de Venta</div>
+                        <table class="order-table">
+                            <thead>
+                                <tr>
+                                    <th>Precio (USDT)</th>
+                                    <th>Cantidad</th>
+                                    <th>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sell-orders">
+                                <tr>
+                                    <td colspan="3" class="loading">Cargando órdenes...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="right-panel">
+                <div class="trade-panel">
+                    <div class="panel-title">Panel de Trading</div>
+
+                    <div class="trade-type">
+                        <button class="trade-type-btn active" data-type="limit">Orden Limitada</button>
+                        <button class="trade-type-btn" data-type="market">Orden de Mercado</button>
+                    </div>
+
+                    <div class="input-group">
+                        <div class="input-label">
+                            <span>Precio (USDT)</span>
+                            <span>Último: <span id="last-price">$0.00</span></span>
+                        </div>
+                        <input type="number" id="price" class="input-field" value="0.00" step="0.00001"
+                            placeholder="Precio por unidad">
+                    </div>
+
+                    <div class="input-group">
+                        <div class="input-label">
+                            <span>Cantidad a <span id="action-type">comprar</span></span>
+                            <span>Disponible: <span id="available-amount">0.00</span></span>
+                        </div>
+                        <input type="number" id="amount" class="input-field" value="0.00" step="0.00001"
+                            placeholder="Cantidad">
+                    </div>
+
+                    <div class="input-group">
+                        <label class="input-label">Total (USDT)</label>
+                        <input type="number" id="total" class="input-field" value="0.00" readonly>
+                    </div>
+
+                    <div class="balance-section">
+                        <div class="balance-row">
+                            <span class="balance-label">Disponible en USDT:</span>
+                            <span class="balance-value" id="available-usdt">10,000.00 USDT</span>
+                        </div>
+                        <div class="balance-row">
+                            <span class="balance-label">Máximo a comprar:</span>
+                            <span class="balance-value" id="max-buy">0.000000 BTC</span>
+                        </div>
+                    </div>
+
+                    <button class="btn-oculto" id="buy-btn">Comprar</button>
+
+                    <!-- Nuevo botón para comprar con PayPal -->
+                    <button class="paypal-trade-btn action-btn buy-btn" data-bs-toggle="modal"
+                        data-bs-target="#paypalSummaryModal">
+                        <i class="fab fa-paypal me-2"></i>Comprar con PayPal
+                    </button>
+
+                    <div class="balance-section">
+                        <div class="balance-row">
+                            <span class="balance-label">Disponible en Cripto:</span>
+                            <span class="balance-value" id="available-crypto">0.000000 BTC</span>
+                        </div>
+                        <div class="balance-row">
+                            <span class="balance-label">Máximo a vender:</span>
+                            <span class="balance-value" id="max-sell">0.000000 BTC</span>
+                        </div>
+                    </div>
+
+                    <button class="action-btn sell-btn" id="sell-btn">Vender</button>
+                </div>
+
+                <div class="orders-container">
+                    <div class="tabs">
+                        <div class="tab active">Posiciones Abiertas</div>
+                        <div class="tab">Historial</div>
+                    </div>
+
+                    <div class="positions" id="positions-container">
+                        <div style="text-align: center; padding: 40px 20px; color: var(--text-secondary);">
+                            <div style="font-size: 48px; margin-bottom: 10px;">📊</div>
+                            <div>No hay posiciones abiertas</div>
+                            <div style="font-size: 13px; margin-top: 5px;">Realiza tu primera operación para comenzar
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="transaction-history" id="transaction-history" style="display: none;">
+                        <!-- Las transacciones se cargarán aquí -->
+                    </div>
+                </div>
+
+                <!-- Nueva sección para ganancias retirables -->
+                <div class="withdrawable-section">
+                    <div class="withdrawable-title">GANANCIAS RETIRABLES DISPONIBLES</div>
+                    <div class="withdrawable-amount" id="withdrawable-amount">$0.00</div>
+                    <div class="withdrawable-subtitle">Disponibles para retiro inmediato</div>
+
+                    <div class="withdrawal-options">
+                        <div class="withdrawal-option" onclick="redirectToPaypalTransfer()">
+                            <i class="fab fa-paypal"></i>
+                            <div>Retiro PayPal</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sección de retiro PayPal (oculta) -->
+                <div class="paypal-withdrawal-section" id="paypal-section" style="display: none;">
+                    <div class="paypal-header">
+                        <h5 class="mb-0"><i class="fab fa-paypal me-2"></i>Retiro de Ganancias a PayPal</h5>
+                    </div>
+
+                    <div class="paypal-balance">
+                        <h4 class="mb-1">Ganancias Disponibles</h4>
+                        <h2 class="fw-bold mb-0" id="paypal-withdrawable-amount">$0.00</h2>
+                        <small>Para retiro inmediato</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <h6 class="d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-percentage me-2"></i>Tarifa de retiro</span>
+                            <span class="badge bg-warning text-dark">1.5%</span>
+                        </h6>
+                        <p class="text-muted small mb-0">Mínimo $0.25 - Máximo $10.00</p>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="paypalWithdrawAmount" class="input-label">Monto a Retirar (USD)</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" class="form-control" id="paypalWithdrawAmount" placeholder="0.00"
+                                step="0.01" min="10" max="5000" value="100">
+                        </div>
+                        <div class="form-text">Mínimo $10.00 - Máximo $5,000.00</div>
+                    </div>
+
+                    <div class="withdrawal-summary">
+                        <h6 class="mb-3 text-center"><i class="fas fa-receipt me-2"></i>Resumen del Retiro</h6>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Monto a retirar:</span>
+                            <strong>$<span id="paypalSummaryAmount">100.00</span></strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Tarifa de retiro (1.5%):</span>
+                            <strong class="text-danger">-$<span id="paypalSummaryFee">1.50</span></strong>
+                        </div>
+                        <hr>
+                        <div class="d-flex justify-content-between">
+                            <strong>Total a recibir:</strong>
+                            <strong class="text-success">$<span id="paypalSummaryTotal">98.50</span></strong>
+                        </div>
+                    </div>
+
+                    <div class="text-center mb-4">
+                        <p class="text-muted mb-3">Haz clic en el botón para iniciar sesión en PayPal y autorizar el retiro</p>
+                        <div id="paypal-button-container"></div>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-plug me-3"></i>
+                            <div>
+                                <h6 class="mb-1">Estado de Conexión</h6>
+                                <p class="mb-0" id="paypalConnectionStatus">Conectando con PayPal...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Modal para compra de criptomonedas -->
+    <div class="modal fade" id="buyCryptoModal" tabindex="-1" aria-labelledby="buyCryptoModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="buyCryptoModalLabel">
+                        <i class="fab fa-bitcoin me-2"></i>Comprar Criptomonedas
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="crypto-card">
+                        <div class="d-flex align-items-center mb-4">
+                            <div class="crypto-icon">
+                                <i id="modal-crypto-icon" class="fab fa-bitcoin"></i>
+                            </div>
+                            <div>
+                                <h4 class="mb-0" id="modal-crypto-name">Bitcoin (BTC)</h4>
+                                <p class="text-muted mb-0">Precio actual: <span id="modal-current-price">$0.00</span>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Cantidad a comprar</label>
+                            <input type="number" id="modal-crypto-amount" class="form-control" placeholder="0.000000"
+                                step="0.000001" min="0.000001">
+                            <div class="form-text">Mínimo: 0.000001 <span id="modal-crypto-symbol">BTC</span></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Precio por unidad (USD)</label>
+                            <input type="number" id="modal-unit-price" class="form-control" readonly>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Monto total (USD)</label>
+                            <input type="number" id="modal-total-amount" class="form-control" readonly>
+                        </div>
+                    </div>
+
+                    <div class="summary-card">
+                        <h5 class="mb-3">Resumen de la compra</h5>
+
+                        <div class="summary-item">
+                            <span>Subtotal:</span>
+                            <span id="modal-summary-subtotal">$0.00</span>
+                        </div>
+
+                        <div class="summary-item">
+                            <span>Comisión (1%):</span>
+                            <span id="modal-summary-fee">$0.00</span>
+                        </div>
+
+                        <div class="summary-item" style="font-weight: bold; font-size: 18px;">
+                            <span>Total a pagar:</span>
+                            <span id="modal-summary-total">$0.00</span>
+                        </div>
+
+                        <p class="fee-note">
+                            <strong class="text-danger">*</strong>
+                            La comisión incluye el procesamiento de PayPal y los gastos de la red blockchain
+                        </p>
+                    </div>
+
+                    <div id="modal-paypal-button-container"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para resumen de compra con PayPal (SIMPLIFICADO) -->
+    <div class="modal fade" id="paypalSummaryModal" tabindex="-1" aria-labelledby="paypalSummaryModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-md">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="paypalSummaryModalLabel">
+                        <i class="fab fa-paypal me-2"></i>Resumen de Compra
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="d-flex align-items-center mb-4">
+                        <div class="crypto-icon me-3">
+                            <i id="summary-crypto-icon" class="fab fa-bitcoin fa-2x"></i>
+                        </div>
+                        <div>
+                            <h4 class="mb-0" id="summary-crypto-name">Bitcoin (BTC)</h4>
+                            <p class="mb-0">Precio actual: <span id="summary-current-price">$0.00</span></p>
+                        </div>
+                    </div>
+
+                    <div class="summary-card">
+                        <h5 class="mb-3">Resumen de la compra</h5>
+
+                        <div class="summary-item d-flex justify-content-between mb-2">
+                            <span>Cantidad:</span>
+                            <span id="summary-crypto-amount">0.00 BTC</span>
+                        </div>
+
+                        <div class="summary-item d-flex justify-content-between mb-2">
+                            <span>Precio por unidad:</span>
+                            <span id="summary-unit-price">$0.00</span>
+                        </div>
+
+                        <div class="summary-item d-flex justify-content-between mb-2">
+                            <span>Subtotal:</span>
+                            <span id="summary-subtotal">$0.00</span>
+                        </div>
+
+                        <div class="summary-item d-flex justify-content-between mb-2">
+                            <span>Comisión (1%):</span>
+                            <span id="summary-fee">$0.00</span>
+                        </div>
+
+                        <hr>
+
+                        <div class="summary-item d-flex justify-content-between mb-3"
+                            style="font-weight: bold; font-size: 18px;">
+                            <span>Total a pagar:</span>
+                            <span id="summary-total">$0.00</span>
+                        </div>
+
+                        <p class="fee-note small">* La comisión incluye el procesamiento de
+                            PayPal y los gastos de la red blockchain</p>
+                    </div>
+
+                    <div id="summary-paypal-button-container" class="mt-4"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- fin del modal Paypal -->
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', path='/js/crypto-trading.js') }}"></script>
+</body>
+
+</html>

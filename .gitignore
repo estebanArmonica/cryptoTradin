@@ -1,0 +1,19 @@
+# Entornos de desarrollo
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Dependencias de Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Entorno virtual de Python
+venv/
+env/
+ENV/
+.env
+.venv/
