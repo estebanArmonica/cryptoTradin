@@ -5,7 +5,19 @@ from typing import Dict, List, Optional, Any
 from app.utils.exceptions import handle_api_error
 from datetime import datetime
 
+from pydantic import BaseModel
+from typing import Optional
+
 router = APIRouter(prefix="/proton", tags=["Proton Wallet"])
+
+# Modelos Pydantic para validación de datos
+class TransferRequest(BaseModel):
+    from_account: str
+    to_account: str
+    quantity: str
+    memo: Optional[str] = ""
+    contract: Optional[str] = "eosio.token"
+
 
 @router.post("/connect")
 async def connect_proton_wallet(account_name: str, permission: str = "active"):
@@ -109,15 +121,11 @@ async def get_specific_token_balance(
     except Exception as e:
         raise handle_api_error(e, f"Error obteniendo balance de {symbol} para {account_name}")
 
+"""
+No borrar (se creara el mismo pero con datos mock para prueba)
 @router.post("/transfer")
-async def proton_transfer(
-    from_account: str,
-    to_account: str,
-    quantity: str,
-    memo: str = "",
-    contract: str = "eosio.token"
-):
-    """
+async def proton_transfer(transfer_data: TransferRequest):
+    
     Crear transacción de transferencia en Proton
     
     - **from_account**: Cuenta de origen
@@ -125,8 +133,19 @@ async def proton_transfer(
     - **quantity**: Cantidad con símbolo (ej: "10.0000 XPR")
     - **memo**: Memo opcional para la transferencia
     - **contract**: Contrato del token (default: eosio.token)
-    """
+    
+
     try:
+        # print de forma temporal (para ver el error 422)
+        print(f'Datos recibidos {transfer_data}')
+
+        # Accede a los datos a través del objeto transfer_data
+        from_account = transfer_data.from_account
+        to_account = transfer_data.to_account
+        quantity = transfer_data.quantity
+        memo = transfer_data.memo
+        contract = transfer_data.contract
+
         if not all([from_account, to_account, quantity]):
             raise HTTPException(status_code=400, detail="from_account, to_account y quantity son requeridos")
         
@@ -140,7 +159,9 @@ async def proton_transfer(
                 detail="Formato de quantity inválido. Use: '10.0000 XPR'"
             )
         
+        # problema principal
         result = await proton_service.transfer(from_account, to_account, quantity, memo, contract)
+
         if not result['success']:
             raise HTTPException(
                 status_code=400, 
@@ -160,6 +181,78 @@ async def proton_transfer(
         raise
     except Exception as e:
         raise handle_api_error(e, "Error creando transacción de transferencia")
+
+"""
+
+@router.post("/transfer")
+async def proton_transfer(transfer_data: TransferRequest):
+    """
+    Crear transacción de transferencia en Proton (VERSIÓN TEMPORAL PARA TESTING)
+    """
+    try:
+        print(f'Datos recibidos: {transfer_data}')
+
+        # SIMULACIÓN TEMPORAL - ELIMINAR CUANDO EL SERVICIO REAL FUNCIONE
+        from_account = transfer_data.from_account
+        to_account = transfer_data.to_account
+        quantity = transfer_data.quantity
+        memo = transfer_data.memo
+        contract = transfer_data.contract
+
+        # Validar datos básicos
+        if not all([from_account, to_account, quantity]):
+            raise HTTPException(status_code=400, detail="from_account, to_account y quantity son requeridos")
+
+        # Validar formato de quantity
+        try:
+            amount, symbol = quantity.split(' ')
+            float(amount)
+        except ValueError:
+            raise HTTPException(
+                status_code=400, 
+                detail="Formato de quantity inválido. Use: '10.0000 XPR'"
+            )
+
+        # ⚠️ SIMULACIÓN TEMPORAL - REEMPLAZAR CON EL SERVICIO REAL
+        simulated_transaction = {
+            "actions": [
+                {
+                    "account": contract,
+                    "name": "transfer",
+                    "authorization": [{"actor": from_account, "permission": "active"}],
+                    "data": {
+                        "from": from_account,
+                        "to": to_account,
+                        "quantity": quantity,
+                        "memo": memo
+                    }
+                }
+            ],
+            "expiration": "2024-01-01T00:00:00",
+            "ref_block_num": 12345,
+            "ref_block_prefix": 67890,
+            "max_net_usage_words": 0,
+            "max_cpu_usage_ms": 0,
+            "delay_sec": 0,
+            "context_free_actions": [],
+            "transaction_extensions": []
+        }
+
+        return {
+            "success": True,
+            "transaction": simulated_transaction,
+            "chain_id": "aca376f206b8fc25a6ed44dbdc66547c36c6c33e3a119ffbeaef943642f0e906",  # Mainnet ID
+            "message": "✅ Transacción simulada creada exitosamente (MODO TEST)",
+            "next_step": "Firmar la transacción con una wallet compatible",
+            "timestamp": datetime.now().isoformat(),
+            "note": "⚠️ Esta es una simulación temporal para testing"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise handle_api_error(e, "Error creando transacción de transferencia")
+
 
 @router.post("/push-transaction")
 async def push_proton_transaction(signed_transaction: Dict[str, Any]):
