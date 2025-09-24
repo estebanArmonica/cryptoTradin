@@ -7,8 +7,8 @@ from sqlalchemy.pool import QueuePool
 from sqlalchemy import text
 from contextlib import asynccontextmanager
 
-from app.core.config import settings
-from app.core.cache import redis_client
+from src.app.core.config import settings
+from src.app.core.cache import redis_client
 
 logger = logging.getLogger(__name__)
 

@@ -22,6 +22,21 @@ from app.services.trading_service import trading_service
 from app.models.schemas import FilterRequest
 from app.services.proton_service import proton_service  # Servicio de Proton
 
+# servicios nuevos
+from app.apis.api_coinbase import router as coinbase_router
+from app.services.coinbase_service import coinbase_service
+
+# AGREGAR estas importaciones al inicio de main.py:
+from .dependencies import (
+    get_current_user, 
+    get_current_user_with_details,
+    rate_limit,
+    get_user_balance,
+    validate_transaction_amount,
+    validate_coin_id,
+    get_config
+)
+
 app = FastAPI(
     title="Crypto Trading Platform",
     description="Plataforma avanzada de trading de criptomonedas con procesamiento de pagos",
@@ -57,6 +72,7 @@ app.include_router(coingecko_router, prefix="/api/v1", tags=["CoinGecko"])
 app.include_router(dashboard_router, prefix="/api/v1", tags=["Dashboard"])
 app.include_router(braintree_router, prefix="/api", tags=["Payments"])
 app.include_router(proton_router, prefix="/api", tags=["Proton Wallet"])  # Nuevo router de Proton
+app.include_router(coinbase_router, prefix="/api", tags=["Coinbase Wallet"])  # Nuevo router de Coinbase
 
 # Montar archivos estáticos
 static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
@@ -696,62 +712,6 @@ async def create_session(user_id: int) -> str:
     
     return session_token
 
-async def verify_session(session_token: str) -> Optional[int]:
-    """Verifica si una sesión es válida y devuelve el user_id"""
-    conn = await asyncpg.connect(**DATABASE_CONFIG)
-    try:
-        result = await conn.fetchrow(
-            "SELECT user_id FROM sessions WHERE session_token = $1 AND expires_at > $2",
-            session_token, datetime.now()
-        )
-        return result['user_id'] if result else None
-    finally:
-        await conn.close()
-
-async def get_user_balance(user_id: int) -> decimal.Decimal:
-    """Obtiene el balance USD de un usuario"""
-    conn = await asyncpg.connect(**DATABASE_CONFIG)
-    try:
-        result = await conn.fetchrow(
-            "SELECT usd_balance FROM user_balances WHERE user_id = $1",
-            user_id
-        )
-        
-        if result:
-            return decimal.Decimal(str(result['usd_balance']))
-        else:
-            # Crear registro si no existe
-            await conn.execute(
-                "INSERT INTO user_balances (user_id, usd_balance) VALUES ($1, 0.00)",
-            user_id
-            )
-            return decimal.Decimal('0.00')
-    finally:
-        await conn.close()
-
-async def update_user_balance(user_id: int, amount: decimal.Decimal, transaction_type: str):
-    """Actualiza el balance de un usuario"""
-    current_balance = await get_user_balance(user_id)
-    
-    if transaction_type == 'deposit':
-        new_balance = current_balance + amount
-    elif transaction_type == 'withdrawal':
-        if current_balance < amount:
-            raise ValueError("Saldo insuficiente para el retiro")
-        new_balance = current_balance - amount
-    else:
-        raise ValueError("Tipo de transacción no válido")
-    
-    conn = await asyncpg.connect(**DATABASE_CONFIG)
-    try:
-        await conn.execute(
-            "UPDATE user_balances SET usd_balance = $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2",
-            float(new_balance), user_id
-        )
-    finally:
-        await conn.close()
-    
-    return new_balance
 
 async def record_transaction(user_id: int, transaction_id: str, amount: decimal.Decimal, 
                            currency: str, status: str, transaction_type: str, 
@@ -769,19 +729,6 @@ async def record_transaction(user_id: int, transaction_id: str, amount: decimal.
         )
     finally:
         await conn.close()
-
-# Dependencia para verificar autenticación (actualizada)
-async def get_current_user(request: Request):
-    """Obtiene el usuario actual desde la cookie de sesión"""
-    session_token = request.cookies.get("session_token")
-    if not session_token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
-    
-    user_id = await verify_session(session_token)
-    if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sesión inválida o expirada")
-    
-    return user_id
 
 # Endpoints de notificaciones de email
 @app.post("/api/notifications/ema-alert")
@@ -1588,7 +1535,7 @@ async def buy_crypto_with_paypal(
             raise HTTPException(status_code=400, detail="El monto no coincide con el cálculo")
         
         # LÓGICA REAL DE PAYPAL - Ejecutar el pago
-        payment = Payment.find(payment_id)
+        payment = payment.find(payment_id)
         
         # Verificar que el pago esté aprobado
         if payment.state != 'approved':
@@ -2030,6 +1977,10 @@ async def startup_event():
         # Inicializar servicio de Proton Wallet
         await proton_service.initialize()
         print("✅ Proton Wallet service initialized successfully")
+
+        # Inicializar servicio de Coinbase Wallet
+        await coinbase_service.initialize()
+        print("✅ Coinbase Wallet service initialized successfully")
         
         print("✅ Dashboard endpoints registered")
         print("✅ API version 2.0.0 is ready")

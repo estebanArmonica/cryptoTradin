@@ -10,8 +10,6 @@ from base64 import b64encode
 
 from app.utils.database_utils import record_transaction, update_user_balance
 
-
-
 # Cargar variables de entorno
 load_dotenv()
 

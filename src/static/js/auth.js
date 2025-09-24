@@ -1,5 +1,5 @@
 // Verificar autenticación al cargar la página
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     checkAuthentication();
     setupAuthHandlers();
 });
@@ -9,7 +9,7 @@ function setupAuthHandlers() {
     // Manejar cierre de sesión
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
-        logoutBtn.addEventListener('click', function(e) {
+        logoutBtn.addEventListener('click', function (e) {
             e.preventDefault();
             logout();
         });
@@ -19,7 +19,7 @@ function setupAuthHandlers() {
     setInterval(checkSession, 300000); // Cada 5 minutos
 }
 
-// Verificar si el usuario está autenticado
+// Verificar si el usuario está autenticado (FIXED)
 async function checkAuthentication() {
     try {
         const response = await fetch('/api/user/balance', {
@@ -31,8 +31,16 @@ async function checkAuthentication() {
         });
         
         if (response.status === 401) {
-            // No autenticado, redirigir al login
-            handleAuthError();
+            // Solo redirigir si estamos en una página que requiere autenticación
+            const currentPath = window.location.pathname;
+            const protectedPages = ['/dashboard', '/wallet', '/trading', '/profile'];
+            
+            if (protectedPages.includes(currentPath)) {
+                console.warn('Redirigiendo al login desde página protegida');
+                handleAuthError();
+            } else {
+                console.warn('Usuario no autenticado en página pública');
+            }
             return false;
         }
         
@@ -48,13 +56,12 @@ async function checkAuthentication() {
     } catch (error) {
         console.error('Error checking authentication:', error);
         
-        // Solo redirigir si es error de red o servidor
+        // No redirigir por errores de red
         if (error.name === 'TypeError' || error.message.includes('Failed to fetch')) {
-            console.warn('Error de conexión, pero manteniendo sesión local');
+            console.warn('Error de conexión, manteniendo interfaz activa');
             return true; // Mantener UI como si estuviera autenticado
         }
         
-        handleAuthError();
         return false;
     }
 }
@@ -69,15 +76,15 @@ async function checkSession() {
                 'Accept': 'application/json'
             }
         });
-        
+
         if (response.status === 401) {
             console.warn('Sesión expirada');
             showSessionExpiredWarning();
             return false;
         }
-        
+
         return response.ok;
-        
+
     } catch (error) {
         console.warn('Error verificando sesión:', error);
         return true; // Asumir que la sesión sigue activa en caso de error de red
@@ -123,7 +130,7 @@ function handleAuthError() {
     if (currentPath !== '/' && currentPath !== '/register') {
         sessionStorage.setItem('redirectAfterLogin', currentPath);
     }
-    
+
     // Redirigir al login
     window.location.href = '/';
 }
@@ -132,7 +139,7 @@ function handleAuthError() {
 function showSessionExpiredWarning() {
     // Crear o mostrar modal de sesión expirada
     let expiredModal = document.getElementById('sessionExpiredModal');
-    
+
     if (!expiredModal) {
         expiredModal = document.createElement('div');
         expiredModal.id = 'sessionExpiredModal';
@@ -156,7 +163,7 @@ function showSessionExpiredWarning() {
         `;
         document.body.appendChild(expiredModal);
     }
-    
+
     const modal = new bootstrap.Modal(expiredModal);
     modal.show();
 }
@@ -165,7 +172,7 @@ function showSessionExpiredWarning() {
 async function logout() {
     try {
         showLoading('Cerrando sesión...');
-        
+
         const response = await fetch('/api/logout', {
             method: 'POST',
             credentials: 'include',
@@ -173,18 +180,18 @@ async function logout() {
                 'Accept': 'application/json'
             }
         });
-        
+
         if (response.ok) {
             // Limpiar cualquier dato local
             sessionStorage.clear();
             localStorage.removeItem('protonWallet');
-            
+
             // Redirigir al login
             window.location.href = '/';
         } else {
             throw new Error('Error en el logout');
         }
-        
+
     } catch (error) {
         console.error('Error during logout:', error);
         // Redirigir de todas formas
@@ -198,7 +205,7 @@ async function logout() {
 function protectRoute() {
     const protectedRoutes = ['/dashboard', '/wallet', '/trading', '/profile', '/simulacion'];
     const currentPath = window.location.pathname;
-    
+
     if (protectedRoutes.includes(currentPath)) {
         checkAuthentication().then(isAuthenticated => {
             if (!isAuthenticated) {
@@ -208,26 +215,50 @@ function protectRoute() {
     }
 }
 
-// Interceptar requests para manejar errores de autenticación
+// ===== AUTHENTICATION INTERCEPTOR (FIXED) =====
 function setupAuthInterceptor() {
     const originalFetch = window.fetch;
-    
-    window.fetch = async function(...args) {
+
+    window.fetch = async function (...args) {
         try {
             const response = await originalFetch(...args);
-            
+
+            // Solo manejar errores 401 en endpoints críticos de autenticación
             if (response.status === 401) {
-                // Sesión expirada
-                showSessionExpiredWarning();
-                throw new Error('Unauthorized');
+                const url = args[0];
+
+                // Lista de endpoints que requieren autenticación estricta
+                const criticalEndpoints = [
+                    '/api/user/balance',
+                    '/api/user/profile',
+                    '/api/notifications',
+                    '/dashboard',
+                    '/profile'
+                ];
+
+                // Verificar si es un endpoint crítico
+                const isCriticalEndpoint = criticalEndpoints.some(endpoint =>
+                    typeof url === 'string' && url.includes(endpoint)
+                );
+
+                if (isCriticalEndpoint) {
+                    console.warn('Sesión expirada en endpoint crítico:', url);
+                    handleAuthError();
+                    throw new Error('Unauthorized');
+                } else {
+                    // Para endpoints no críticos, solo loggear y dejar que la aplicación maneje el error
+                    console.warn('Error 401 en endpoint no crítico:', url);
+                    return response; // Devolver la respuesta para que la aplicación la maneje
+                }
             }
-            
+
             return response;
         } catch (error) {
-            if (error.message === 'Unauthorized') {
-                // Ya manejado por el interceptor
+            // Solo relanzar errores que no sean de red
+            if (error.name !== 'TypeError') {
                 throw error;
             }
+            console.warn('Error de red:', error);
             throw error;
         }
     };

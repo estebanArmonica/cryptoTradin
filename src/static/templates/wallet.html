@@ -1,93 +1,278 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wallet - Crypto Trading Platform</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="/static/css/styles.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/styles.css') }}">
     <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --coinbase-gradient: linear-gradient(135deg, #0052FF 0%, #00D4FF 100%);
+            --success-gradient: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            --warning-gradient: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+            --dark-gradient: linear-gradient(135deg, #343a40 0%, #495057 100%);
+        }
+
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
         .wallet-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--primary-gradient);
             color: white;
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 25px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-        }
-        .proton-connect-btn {
-            background: linear-gradient(135deg, #00D3FF 0%, #7C4DFF 100%);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
             border: none;
-            border-radius: 25px;
-            padding: 12px 30px;
-            font-weight: 600;
-            transition: all 0.3s ease;
         }
-        .proton-connect-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0,211,255,0.3);
+
+        .wallet-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
         }
+
+        .coinbase-card {
+            background: var(--coinbase-gradient);
+        }
+
         .balance-card {
             background: white;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
-            margin-bottom: 20px;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+            margin-bottom: 25px;
+            transition: all 0.3s ease;
+            border: none;
         }
+
+        .balance-card:hover {
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+            transform: translateY(-3px);
+        }
+
         .token-card {
             border: 1px solid #e9ecef;
             border-radius: 12px;
-            padding: 15px;
+            padding: 20px;
             margin-bottom: 15px;
             transition: all 0.3s ease;
+            background: white;
         }
+
         .token-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+            border-color: #007bff;
         }
+
         .transfer-form {
             background: white;
-            border-radius: 12px;
+            border-radius: 15px;
             padding: 25px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+            height: 100%;
         }
+
         .connected-badge {
-            background: #28a745;
+            background: var(--success-gradient);
             color: white;
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 12px;
+            padding: 8px 20px;
+            border-radius: 25px;
+            font-size: 14px;
             font-weight: 600;
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
         }
-        .proton-logo {
-            width: 40px;
-            height: 40px;
-            margin-right: 10px;
-        }
-        .token-icon {
-            width: 40px;
-            height: 40px;
+
+        .wallet-logo {
+            width: 50px;
+            height: 50px;
+            margin-right: 15px;
             border-radius: 50%;
-            background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+            background: rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .token-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: var(--primary-gradient);
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
+            font-size: 20px;
+            margin-right: 15px;
         }
+
         .portfolio-value {
-            font-size: 1.8rem;
+            font-size: 2.2rem;
             font-weight: bold;
+            color: white;
+            text-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        .account-info-box {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .nav-tabs .nav-link {
+            border: none;
+            color: #6c757d;
+            font-weight: 500;
+            padding: 12px 20px;
+            border-radius: 10px 10px 0 0;
+        }
+
+        .nav-tabs .nav-link.active {
+            background: var(--primary-gradient);
+            color: white;
+            border: none;
+        }
+
+        .btn-primary {
+            background: var(--primary-gradient);
+            border: none;
+            border-radius: 10px;
+            padding: 12px 25px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-coinbase {
+            background: var(--coinbase-gradient);
+            border: none;
+            border-radius: 10px;
+            padding: 12px 25px;
+            font-weight: 600;
+            color: white;
+            transition: all 0.3s ease;
+        }
+
+        .btn-coinbase:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 82, 255, 0.4);
+            color: white;
+        }
+
+        .chain-badge {
+            background: var(--dark-gradient);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .crypto-price {
+            font-size: 1.5rem;
+            font-weight: 700;
             color: #28a745;
         }
-        .account-info-box {
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            border-radius: 10px;
-            padding: 15px;
+
+        .section-title {
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: #343a40;
+            position: relative;
+            padding-bottom: 10px;
+        }
+
+        .section-title:after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 50px;
+            height: 3px;
+            background: var(--primary-gradient);
+            border-radius: 3px;
+        }
+
+        .transaction-item {
             border-left: 4px solid #007bff;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #f8f9fa;
+            border-radius: 0 10px 10px 0;
+            transition: all 0.3s ease;
+        }
+
+        .transaction-item:hover {
+            background: #e9ecef;
+            transform: translateX(5px);
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.05);
+            }
+
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        .floating-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            z-index: 1000;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
         }
     </style>
 </head>
+
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
@@ -111,39 +296,59 @@
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h2><i class="fas fa-wallet me-2"></i>Mi Wallet</h2>
                     <span id="connectionStatus" class="connected-badge" style="display: none;">
-                        <i class="fas fa-check-circle"></i> Conectado a Proton
+                        <i class="fas fa-check-circle"></i> Conectado a Coinbase
                     </span>
                 </div>
             </div>
         </div>
 
-        <!-- Proton Wallet Connection -->
+        <!-- Coinbase Wallet Connection -->
         <div class="row mb-4">
             <div class="col-12">
-                <div class="wallet-card">
+                <div class="wallet-card coinbase-card fade-in">
                     <div class="row align-items-center">
-                        <div class="col-md-6">
-                            <h4><img src="/static/images/proton-logo.png" alt="Proton" class="proton-logo"> Proton Wallet</h4>
-                            <p class="mb-3">Conecta tu wallet de Proton para gestionar tus criptoactivos de forma segura</p>
-                            
-                            <div class="row g-2">
-                                <div class="col-md-8">
-                                    <input type="text" class="form-control" id="accountNameInput" 
-                                           placeholder="Ingresa tu nombre de cuenta de Proton" 
-                                           pattern="[a-z1-5.]{1,12}" 
-                                           title="Nombre de cuenta Proton (1-12 caracteres, a-z, 1-5, .)">
+                        <div class="col-md-8">
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="wallet-logo">
+                                    <i class="fab fa-bitcoin"></i>
                                 </div>
-                                <div class="col-md-4">
-                                    <button id="connectProtonBtn" class="btn proton-connect-btn w-100" onclick="connectProtonWallet()">
-                                        <i class="fas fa-plug"></i> Conectar
-                                    </button>
+                                <div>
+                                    <h4>Coinbase Wallet</h4>
+                                    <p class="mb-0">Gestiona tus cuentas EVM y Solana de forma segura</p>
+                                </div>
+                            </div>
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="d-grid gap-2">
+                                        <button id="connectCoinbaseBtn" class="btn btn-coinbase"
+                                            onclick="connectCoinbaseWallet()">
+                                            <i class="fas fa-plug"></i> Conectar Coinbase
+                                        </button>
+                                        <button id="disconnectCoinbaseBtn" class="btn btn-outline-light"
+                                            onclick="disconnectCoinbaseWallet()" style="display: none;">
+                                            <i class="fas fa-power-off"></i> Desconectar
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="d-grid gap-2">
+                                        <button class="btn btn-outline-light"
+                                            onclick="coinbaseWallet.createEVMAccount()">
+                                            <i class="fas fa-plus"></i> Nueva Cuenta EVM
+                                        </button>
+                                        <button class="btn btn-outline-light"
+                                            onclick="coinbaseWallet.createSolanaAccount()">
+                                            <i class="fas fa-plus"></i> Nueva Cuenta Solana
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-6 text-end">
+                        <div class="col-md-4 text-end">
                             <div class="account-info-box">
                                 <h5 class="portfolio-value" id="totalPortfolioValue">$0.00 USD</h5>
-                                <p class="mb-0 text-muted">Valor total del portfolio</p>
+                                <p class="mb-0">Valor total del portfolio</p>
                             </div>
                         </div>
                     </div>
@@ -154,31 +359,40 @@
         <!-- Connected Account Info -->
         <div class="row mb-4" id="accountInfo" style="display: none;">
             <div class="col-12">
-                <div class="balance-card">
+                <div class="balance-card fade-in">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5><i class="fas fa-user-circle me-2"></i>Información de Cuenta</h5>
+                        <h5 class="section-title"><i class="fas fa-user-circle me-2"></i>Información de Cuenta Coinbase
+                        </h5>
                         <div>
-                            <button class="btn btn-sm btn-outline-info me-2" onclick="showProtonAccountInfo()">
+                            <button class="btn btn-sm btn-outline-info me-2" onclick="showCoinbaseAccountInfo()">
                                 <i class="fas fa-info-circle"></i> Detalles
                             </button>
-                            <button class="btn btn-sm btn-outline-danger" onclick="disconnectProtonWallet()">
+                            <button class="btn btn-sm btn-outline-danger" onclick="disconnectCoinbaseWallet()">
                                 <i class="fas fa-power-off"></i> Desconectar
                             </button>
                         </div>
                     </div>
-                    
+
                     <div class="row mt-3">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <p><strong>Nombre de cuenta:</strong><br>
-                            <span id="accountName" class="text-primary">-</span></p>
+                                <span id="accountName" class="text-primary">-</span>
+                            </p>
                         </div>
-                        <div class="col-md-4">
-                            <p><strong>Balance XPR:</strong><br>
-                            <span id="totalBalance" class="text-success">-</span></p>
+                        <div class="col-md-3">
+                            <p><strong>Dirección:</strong><br>
+                                <span id="accountAddress" class="font-monospace">-</span>
+                            </p>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
+                            <p><strong>Tipo:</strong><br>
+                                <span id="accountType" class="chain-badge">-</span>
+                            </p>
+                        </div>
+                        <div class="col-md-3">
                             <p><strong>Última actualización:</strong><br>
-                            <span id="lastUpdate">-</span></p>
+                                <span id="lastUpdate">-</span>
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -188,117 +402,34 @@
         <div class="row">
             <!-- Balances y Tokens -->
             <div class="col-lg-8">
-                <div class="balance-card">
+                <div class="balance-card fade-in">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5><i class="fas fa-coins me-2"></i>Mis Tokens</h5>
+                        <h5 class="section-title"><i class="fas fa-coins me-2"></i>Mis Tokens</h5>
                         <div>
-                            <button class="btn btn-sm btn-outline-primary me-2" onclick="loadProtonTokens()">
+                            <button class="btn btn-sm btn-outline-primary me-2" onclick="loadCoinbaseTokens()">
                                 <i class="fas fa-sync-alt"></i> Actualizar
                             </button>
-                            <button class="btn btn-sm btn-outline-secondary" onclick="loadSupportedTokens()">
-                                <i class="fas fa-list"></i> Tokens Soportados
+                            <button class="btn btn-sm btn-outline-secondary" onclick="coinbaseWallet.importAccount()">
+                                <i class="fas fa-download"></i> Importar Cuenta
                             </button>
                         </div>
                     </div>
                     <div id="tokensList">
-                        <div class="text-center py-4">
-                            <i class="fas fa-coins fa-3x text-muted mb-3"></i>
-                            <p class="text-muted">Conecta tu wallet de Proton para ver tus tokens</p>
+                        <div class="text-center py-5">
+                            <i class="fas fa-coins fa-4x text-muted mb-3"></i>
+                            <h5 class="text-muted">Conecta tu wallet de Coinbase</h5>
+                            <p class="text-muted">Para ver tus tokens y balances</p>
+                            <button class="btn btn-primary mt-2" onclick="connectCoinbaseWallet()">
+                                <i class="fas fa-plug"></i> Conectar Wallet
+                            </button>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Transfer Form -->
-            <div class="col-lg-4">
-                <div class="transfer-form">
-                    <h5><i class="fas fa-paper-plane me-2"></i>Transferir Fondos</h5>
-                    <form id="transferForm">
-                        <div class="mb-3">
-                            <label class="form-label">Desde Cuenta *</label>
-                            <input type="text" class="form-control" id="fromAccount" 
-                                   placeholder="tu.cuenta.proton" required
-                                   pattern="[a-z1-5.]{1,12}">
-                            <div class="form-text">Tu nombre de cuenta de Proton</div>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label class="form-label">Hacia Cuenta *</label>
-                            <input type="text" class="form-control" id="toAccount" 
-                                   placeholder="destino.proton" required
-                                   pattern="[a-z1-5.]{1,12}">
-                            <div class="form-text">Cuenta destino de Proton</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Contrato del Token *</label>
-                            <select class="form-select" id="transferContract" required>
-                                <option value="">Seleccionar contrato...</option>
-                                <option value="eosio.token" selected>eosio.token (XPR)</option>
-                                <option value="tokens.proton">tokens.proton (Tokens wrapped)</option>
-                                <option value="usdt.proton">usdt.proton (USDT)</option>
-                                <option value="btc.proton">btc.proton (BTC)</option>
-                                <option value="eth.proton">eth.proton (ETH)</option>
-                            </select>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Símbolo del Token *</label>
-                            <select class="form-select" id="transferSymbol" required>
-                                <option value="">Seleccionar token...</option>
-                                <option value="XPR" selected>XPR (Proton)</option>
-                                <option value="XUSDT">XUSDT (Tether Wrapped)</option>
-                                <option value="XBTC">XBTC (Bitcoin Wrapped)</option>
-                                <option value="XETH">XETH (Ethereum Wrapped)</option>
-                                <option value="USDT">USDT (Tether)</option>
-                                <option value="BTC">BTC (Bitcoin)</option>
-                            </select>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Cantidad *</label>
-                            <div class="input-group">
-                                <input type="number" class="form-control" id="transferAmount" 
-                                       step="0.0001" min="0.0001" placeholder="0.0000" required>
-                                <span class="input-group-text" id="tokenSymbolDisplay">XPR</span>
-                            </div>
-                            <div class="form-text">Formato: 10.0000 XPR</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Memo (Opcional)</label>
-                            <textarea class="form-control" id="transferMemo" rows="2" 
-                                      placeholder="Mensaje para la transacción (máx. 256 caracteres)"
-                                      maxlength="256"></textarea>
-                        </div>
-
-                        <button type="submit" class="btn btn-primary w-100">
-                            <i class="fas fa-paper-plane"></i> Crear Transacción
-                        </button>
-                    </form>
-                </div>
-
-                <!-- Quick Actions -->
-                <div class="balance-card mt-3">
-                    <h6><i class="fas fa-bolt me-2"></i>Acciones Rápidas</h6>
-                    <div class="d-grid gap-2">
-                        <button class="btn btn-outline-success" onclick="protonWallet.loadAccountData()">
-                            <i class="fas fa-sync"></i> Actualizar Todo
-                        </button>
-                        <button class="btn btn-outline-info" onclick="loadProtonTokens()">
-                            <i class="fas fa-coins"></i> Ver Tokens
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Transaction History -->
-        <div class="row mt-4">
-            <div class="col-12">
-                <div class="balance-card">
+                <!-- Transaction History -->
+                <div class="balance-card fade-in">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5><i class="fas fa-history me-2"></i>Últimas Transacciones</h5>
+                        <h5 class="section-title"><i class="fas fa-history me-2"></i>Últimas Transacciones</h5>
                         <button class="btn btn-sm btn-outline-secondary">
                             <i class="fas fa-external-link-alt"></i> Ver en Explorer
                         </button>
@@ -312,18 +443,113 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Sidebar with Actions -->
+            <div class="col-lg-4">
+                <!-- Transfer Form -->
+                <div class="transfer-form fade-in">
+                    <h5 class="section-title"><i class="fas fa-paper-plane me-2"></i>Transferir Fondos</h5>
+                    <form id="transferForm">
+                        <div class="mb-3">
+                            <label class="form-label">Desde Cuenta *</label>
+                            <input type="text" class="form-control" id="fromAccount"
+                                placeholder="0x742d35Cc6634C0532925a3b8D..." required>
+                            <div class="form-text">Tu dirección de wallet</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Hacia Cuenta *</label>
+                            <input type="text" class="form-control" id="toAccount" placeholder="0x8932d5a3b8D..."
+                                required>
+                            <div class="form-text">Dirección destino</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Blockchain *</label>
+                            <select class="form-select" id="transferChain" required>
+                                <option value="">Seleccionar blockchain...</option>
+                                <option value="EVM" selected>Ethereum (EVM)</option>
+                                <option value="Solana">Solana</option>
+                                <option value="Polygon">Polygon</option>
+                                <option value="Arbitrum">Arbitrum</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Token *</label>
+                            <select class="form-select" id="transferToken" required>
+                                <option value="">Seleccionar token...</option>
+                                <option value="ETH" selected>ETH (Ethereum)</option>
+                                <option value="SOL">SOL (Solana)</option>
+                                <option value="USDC">USDC (USD Coin)</option>
+                                <option value="USDT">USDT (Tether)</option>
+                                <option value="BTC">BTC (Bitcoin)</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Cantidad *</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="transferAmount" step="0.0001" min="0.0001"
+                                    placeholder="0.0000" required>
+                                <span class="input-group-text" id="tokenSymbolDisplay">ETH</span>
+                            </div>
+                            <div class="form-text">Formato: 1.5000 ETH</div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-paper-plane"></i> Crear Transacción
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="balance-card mt-3 fade-in">
+                    <h6 class="section-title"><i class="fas fa-bolt me-2"></i>Acciones Rápidas</h6>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-outline-success" onclick="coinbaseWallet.loadAccountBalances()">
+                            <i class="fas fa-sync"></i> Actualizar Balances
+                        </button>
+                        <button class="btn btn-outline-info" onclick="coinbaseWallet.loadTransactionHistory()">
+                            <i class="fas fa-history"></i> Ver Historial
+                        </button>
+                        <button class="btn btn-outline-warning" onclick="showCoinbaseAccountInfo()">
+                            <i class="fas fa-info-circle"></i> Info de Cuenta
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Portfolio Summary -->
+                <div class="balance-card mt-3 fade-in">
+                    <h6 class="section-title"><i class="fas fa-chart-pie me-2"></i>Resumen Portfolio</h6>
+                    <div id="portfolioSummary">
+                        <div class="text-center py-3">
+                            <p class="text-muted">Conecta tu wallet para ver el resumen</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Loading Modal -->
-    <div class="modal fade" id="loadingModal" tabindex="-1">
+    <!-- Modal de Loading -->
+    <div class="modal fade" id="loadingModal" tabindex="-1" aria-labelledby="loadingModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-body text-center py-4">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title" id="loadingModalLabel">Procesando</h5>
+                </div>
+                <div class="modal-body text-center">
                     <div class="spinner-border text-primary mb-3" role="status">
                         <span class="visually-hidden">Cargando...</span>
                     </div>
-                    <h5 id="loadingMessage">Procesando...</h5>
+                    <p id="loadingMessage">Procesando...</p>
+                </div>
+                <div class="modal-footer border-0">
+                    <!-- Botón de cerrar accesible pero deshabilitado -->
+                    <button type="button" class="btn btn-outline-secondary btn-sm" disabled>
+                        <i class="fas fa-times me-1"></i> Cancelar
+                    </button>
                 </div>
             </div>
         </div>
@@ -334,7 +560,7 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title"><i class="fas fa-info-circle me-2"></i>Información de Cuenta Proton</h5>
+                    <h5 class="modal-title"><i class="fas fa-info-circle me-2"></i>Información de Cuenta Coinbase</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body" id="accountInfoModalBody">
@@ -349,92 +575,127 @@
         </div>
     </div>
 
-    <!-- Transaction Modal -->
-    <div class="modal fade" id="transactionModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title"><i class="fas fa-receipt me-2"></i>Detalles de Transacción</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body" id="transactionModalBody">
-                    <!-- Contenido dinámico -->
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                    <button type="button" class="btn btn-primary" onclick="protonWallet.loadAccountData()">
-                        <i class="fas fa-sync"></i> Actualizar Saldos
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
+    <!-- Floating Action Button -->
+    <button class="btn btn-primary floating-btn pulse" onclick="connectCoinbaseWallet()" title="Conectar Wallet">
+        <i class="fas fa-wallet"></i>
+    </button>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="/static/js/proton-wallet.js"></script>
+    <script src="/static/js/coinbase-wallet.js"></script>
     <script src="/static/js/auth.js"></script>
 
     <script>
-        // Actualizar símbolo del token cuando se cambia
-        document.getElementById('transferSymbol').addEventListener('change', function() {
-            document.getElementById('tokenSymbolDisplay').textContent = this.value;
+        // Inicialización cuando el DOM está listo
+        document.addEventListener('DOMContentLoaded', function () {
+            // Actualizar símbolo del token cuando se cambia
+            document.getElementById('transferToken').addEventListener('change', function () {
+                document.getElementById('tokenSymbolDisplay').textContent = this.value;
+            });
+
+            // Verificar si hay una conexión guardada
+            if (localStorage.getItem('coinbase_connected_account')) {
+                setTimeout(() => {
+                    if (coinbaseWallet) {
+                        coinbaseWallet.updateConnectionStatus(true);
+                        coinbaseWallet.loadAccountBalances();
+                    }
+                }, 1000);
+            }
+
+            // Añadir animaciones a los elementos al hacer scroll
+            const observerOptions = {
+                threshold: 0.1,
+                rootMargin: '0px 0px -50px 0px'
+            };
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('fade-in');
+                    }
+                });
+            }, observerOptions);
+
+            // Observar elementos para animación
+            document.querySelectorAll('.balance-card, .wallet-card').forEach(el => {
+                observer.observe(el);
+            });
         });
 
-        // Actualizar contrato cuando se cambia el símbolo y viceversa
-        document.getElementById('transferSymbol').addEventListener('change', updateContractFromSymbol);
-        document.getElementById('transferContract').addEventListener('change', updateSymbolFromContract);
-
-        function updateContractFromSymbol() {
-            const symbol = document.getElementById('transferSymbol').value;
-            const contractSelect = document.getElementById('transferContract');
-            
-            // Mapeo simple de símbolos a contratos
-            const symbolToContract = {
-                'XPR': 'eosio.token',
-                'XUSDT': 'tokens.proton',
-                'XBTC': 'tokens.proton',
-                'XETH': 'tokens.proton',
-                'USDT': 'usdt.proton',
-                'BTC': 'btc.proton',
-                'ETH': 'eth.proton'
-            };
-            
-            if (symbolToContract[symbol]) {
-                contractSelect.value = symbolToContract[symbol];
+        // Función global para conectar wallet
+        function connectCoinbaseWallet() {
+            if (coinbaseWallet) {
+                coinbaseWallet.connectWallet();
             }
         }
 
-        function updateSymbolFromContract() {
-            const contract = document.getElementById('transferContract').value;
-            const symbolSelect = document.getElementById('transferSymbol');
-            
-            // Mapeo simple de contratos a símbolos principales
-            const contractToSymbol = {
-                'eosio.token': 'XPR',
-                'tokens.proton': 'XUSDT',
-                'usdt.proton': 'USDT',
-                'btc.proton': 'BTC',
-                'eth.proton': 'ETH'
-            };
-            
-            if (contractToSymbol[contract]) {
-                symbolSelect.value = contractToSymbol[contract];
-                document.getElementById('tokenSymbolDisplay').textContent = contractToSymbol[contract];
+        // Función global para desconectar wallet
+        function disconnectCoinbaseWallet() {
+            if (coinbaseWallet) {
+                coinbaseWallet.disconnectWallet();
             }
         }
 
-        // Auto-completar desde cuenta cuando está conectado
-        document.addEventListener('DOMContentLoaded', function() {
-            const fromAccountInput = document.getElementById('fromAccount');
-            const accountNameInput = document.getElementById('accountNameInput');
-            
-            // Sincronizar inputs
-            if (accountNameInput && fromAccountInput) {
-                accountNameInput.addEventListener('input', function() {
-                    fromAccountInput.value = this.value;
-                });
+        // Función global para cargar tokens
+        function loadCoinbaseTokens() {
+            if (coinbaseWallet) {
+                coinbaseWallet.loadAccountBalances();
+            }
+        }
+
+        // Función global para mostrar información de cuenta
+        function showCoinbaseAccountInfo() {
+            if (coinbaseWallet && coinbaseWallet.connectedAccount) {
+                const account = coinbaseWallet.connectedAccount;
+                const modalBody = document.getElementById('accountInfoModalBody');
+
+                if (modalBody) {
+                    modalBody.innerHTML = `
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Nombre:</strong> ${account.name || 'No especificado'}</p>
+                                <p><strong>Dirección:</strong> <code>${account.address}</code></p>
+                                <p><strong>Tipo:</strong> ${account.type}</p>
+                                <p><strong>Creado:</strong> ${account.created_at ? new Date(account.created_at).toLocaleString() : 'N/A'}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Importado:</strong> ${account.imported ? 'Sí' : 'No'}</p>
+                                <p><strong>Smart Account:</strong> ${account.is_smart_account ? 'Sí' : 'No'}</p>
+                                <p><strong>Última actualización:</strong> ${new Date().toLocaleString()}</p>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <button class="btn btn-outline-primary btn-sm" onclick="copyToClipboard('${account.address}')">
+                                <i class="fas fa-copy"></i> Copiar Dirección
+                            </button>
+                        </div>
+                    `;
+                }
+
+                new bootstrap.Modal(document.getElementById('accountInfoModal')).show();
+            }
+        }
+
+        // Función para copiar al portapapeles
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = event.target.innerHTML;
+                event.target.innerHTML = '<i class="fas fa-check"></i> Copiado!';
+
+                setTimeout(() => {
+                    event.target.innerHTML = originalText;
+                }, 2000);
+            });
+        }
+
+        // Manejar envío del formulario de transferencia
+        document.getElementById('transferForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            if (coinbaseWallet) {
+                coinbaseWallet.handleTransfer();
             }
         });
     </script>
 </body>
+
 </html>
