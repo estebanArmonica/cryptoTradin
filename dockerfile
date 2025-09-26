@@ -1,48 +1,45 @@
-# Parte 1: Build stage
-FROM python:3.12-slim AS build
+# Usaremos una imagen de Python 3.12.6 en su version 'slim' lo cual es más ligera que la completa
+FROM python:3.12.6-slim
 
-# Parte 2: creamos el directorio de trabajo
-WORKDIR /app
+# Realizamos manejo de variables de entorno
+# ARG: Nos define una variable que se puede pasar al construir la imagen
+# ENV: Establece una variable de entorno dentro del contenedor
+ARG NODE_ENV
+ENV NODE_ENV=$NODE_ENV
 
-# Instalar dependencias de compilación solo si son necesarias
+# Creamos un directorio de trabajo y cambiamos el directorio dentro del contenedor '/src'
+# Primero actualizamos la lista de dependencias 'apt-get update'
+# Segundo instala librerias necesarias para PostgreSQL y compilaciones
+# Tercero el default-libmysqlclient-dev gcc pkg-config son necesarios para paquetes de Python que requieren compilación
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc python3-dev && \
-    rm -rf /var/lib/apt/lists/*
+  apt-get install -y default-libmysqlclient-dev gcc pkg-config
 
-# Crear y activar entorno virtual
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+# Copiamos todo lo que esta en el requirements.txt
+# Luego instalamos todos los paquetes listados del requirements.txt 
+COPY requirements.txt .
 
-# Instalar dependencias primero para aprovechar caché de Docker
-COPY pyproject.toml poetry.lock* ./
-RUN pip install --upgrade pip && \
-    pip install poetry && \
-    poetry config virtualenvs.create false && \
-    poetry install --only main --no-interaction --no-ansi
+# El --no-cache-dir evita que guarde caceh para reducir el tamaño de la imagem
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Stage 2: Runtime stage
-FROM python:3.12-slim
+# Ahora copiamos todo el contenido  del directorio actual (host) al directorio de trabajo del contenedor
+COPY . .
 
-WORKDIR /app
+# Configuramos las variables de entorno especificadas anteriormente
+# ubicada dentro de la aplicación
+COPY .env src/.env
 
-# Copiar solo el entorno virtual desde el builder
-COPY --from=builder /opt/venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+# Realizamos debugging
+# pwd: mostramos el directorio actual
+# ls -lha: listamos los archivos con detalles
+RUN pwd
+RUN ls -lha
 
-# Crear usuario no root
-RUN useradd -m myuser && chown -R myuser:myuser /app
-USER myuser
+# Expone el puerto (indicamos en donde escuchara, esto no lo abre de forma automatica)
+EXPOSE 8000
 
-# Copiar solo lo necesario
-COPY --chown=myuser:myuser ./src /app
+# Le brindamos permisos de ejecución al script 
+RUN chmod +x ./start.sh
 
-# Variables de entorno
-ENV PYTHONPATH=/app \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+# Ejecutamos el script que iniciara el servidor cuando el contenedor este listo
+CMD ["./start.sh"]
 
-# Puerto expuesto (el mismo que usa Uvicorn)
-EXPOSE 8400
-
-# Comando de inicio (sin --reload en producción)
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8400"]
