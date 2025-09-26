@@ -130,3 +130,226 @@ def search_coins(query: str):
     except Exception as e:
         response = handle_api_error(e, "Error al buscar criptomonedas")
         raise HTTPException(status_code=response.status_code, detail=response.body.decode('utf-8'))
+
+#====================================================================================
+# ENDPOINTS NUEVOS AGREGADOS
+#====================================================================================
+@router.get("/coins/{coin_id}/info", response_model=CoinDetail, tags=["Cryptocurrencies"])
+def get_coin_info_by_id(coin_id: str):
+    """
+    Obtiene información detallada de una criptomoneda específica por su ID.
+    
+    - **coin_id**: ID de la criptomoneda (ej. 'bitcoin')
+    """
+    try:
+        coin_data = client.get_coin_by_id(id=coin_id)
+        return CoinDetail(**coin_data)
+    except Exception as e:
+        raise handle_api_error(e, f"Error al obtener información para la criptomoneda {coin_id}")
+
+@router.get("/coins/{coin_id}/tickers", response_model=List[CoinTicker], tags=["Cryptocurrencies"])
+def get_coin_tickers_by_id(coin_id: str):
+    """
+    Obtiene los tickers de una criptomoneda específica por su ID.
+    
+    - **coin_id**: ID de la criptomoneda (ej. 'bitcoin')
+    """
+    try:
+        tickers_data = client.get_coin_ticker_by_id(id=coin_id)
+        tickers = tickers_data.get("tickers", [])
+        return [CoinTicker(**ticker) for ticker in tickers]
+    except Exception as e:
+        raise handle_api_error(e, f"Error al obtener tickers para la criptomoneda {coin_id}")
+
+@router.get("/coins/{coin_id}/history/{date}", response_model=CoinHistory, tags=["Cryptocurrencies"])
+def get_coin_history_by_id_date(coin_id: str, date: str, localization: str = 'false'):
+    """
+    Obtiene datos históricos de una criptomoneda en una fecha específica.
+    
+    - **coin_id**: ID de la criptomoneda (ej. 'bitcoin')
+    - **date**: Fecha en formato 'dd-mm-yyyy' (ej. '30-12-2020')
+    - **localization**: Incluir datos de localización ('true' o 'false')
+    """
+    try:
+        history_data = client.get_coin_history_by_id(id=coin_id, date=date, localization=localization)
+        return CoinHistory(**history_data)
+    except Exception as e:
+        raise handle_api_error(e, f"Error al obtener datos históricos para {coin_id} en la fecha {date}")
+
+@router.get("/coins/{coin_id}/market_chart/range", response_model=CoinMarketChartRange, tags=["Cryptocurrencies"])
+def get_coin_market_chart_range(
+    coin_id: str, 
+    vs_currency: str, 
+    from_timestamp: int, 
+    to_timestamp: int
+):
+    """
+    Obtiene datos de mercado en un rango de tiempo específico.
+    
+    - **coin_id**: ID de la criptomoneda (ej. 'bitcoin')
+    - **vs_currency**: Moneda de referencia (ej. 'usd')
+    - **from_timestamp**: Timestamp de inicio (ej. 1392577232)
+    - **to_timestamp**: Timestamp de fin (ej. 1422577232)
+    """
+    try:
+        chart_data = client.get_coin_market_chart_range_by_id(
+            id=coin_id,
+            vs_currency=vs_currency,
+            from_timestamp=from_timestamp,
+            to_timestamp=to_timestamp
+        )
+        return CoinMarketChartRange(**chart_data)
+    except Exception as e:
+        raise handle_api_error(e, f"Error al obtener datos de mercado en rango para {coin_id}")
+
+@router.get("/coins/{coin_id}/ohlc", response_model=List[OHLCData], tags=["Cryptocurrencies"])
+def get_coin_ohlc(coin_id: str, vs_currency: str, days: int):
+    """
+    Obtiene datos OHLC de una criptomoneda.
+    
+    - **coin_id**: ID de la criptomoneda (ej. 'bitcoin')
+    - **vs_currency**: Moneda de referencia (ej. 'usd')
+    - **days**: Número de días (1, 7, 14, 30, 90, 180, 365, max)
+    """
+    try:
+        ohlc_data = client.get_coin_ohlc_by_id_range(id=coin_id, vs_currency=vs_currency, days=days)
+        return [OHLCData(**item) for item in ohlc_data]
+    except Exception as e:
+        raise handle_api_error(e, f"Error al obtener datos OHLC para {coin_id}")
+
+#===================================================================================
+# ENDPOINTS DE EXCHANGES
+#===================================================================================
+
+@router.get("/exchanges", response_model=List[Exchange], tags=["Exchanges"])
+def get_exchanges_list():
+    """Obtiene una lista de todos los exchanges."""
+    try:
+        exchanges = client.get_exchanges_list()
+        return [Exchange(**exchange) for exchange in exchanges]
+    except Exception as e:
+        raise handle_api_error(e, "Error al obtener lista de exchanges")
+
+@router.get("/exchanges/ids", response_model=List[ExchangeIdName], tags=["Exchanges"])
+def get_exchanges_id_name_list():
+    """Obtiene una lista de IDs y nombres de todos los exchanges."""
+    try:
+        exchanges = client.get_exchanges_id_name_lis()
+        return [ExchangeIdName(**exchange) for exchange in exchanges]
+    except Exception as e:
+        raise handle_api_error(e, "Error al obtener lista de IDs y nombres de exchanges")
+
+@router.get("/exchanges/{exchange_id}", response_model=ExchangeDetail, tags=["Exchanges"])
+def get_exchange_by_id(exchange_id: str):
+    """
+    Obtiene información detallada de un exchange específico.
+    
+    - **exchange_id**: ID del exchange (ej. 'binance')
+    """
+    try:
+        exchange_data = client.get_exchanges_by_id(id=exchange_id)
+        return ExchangeDetail(**exchange_data)
+    except Exception as e:
+        raise handle_api_error(e, f"Error al obtener información del exchange {exchange_id}")
+
+@router.get("/exchanges/{exchange_id}/tickers", response_model=ExchangeTickers, tags=["Exchanges"])
+def get_exchange_tickers(exchange_id: str):
+    """
+    Obtiene los tickers de un exchange específico.
+    
+    - **exchange_id**: ID del exchange (ej. 'binance')
+    """
+    try:
+        tickers_data = client.get_exchanges_tickers_by_id(id=exchange_id)
+        return ExchangeTickers(**tickers_data)
+    except Exception as e:
+        raise handle_api_error(e, f"Error al obtener tickers del exchange {exchange_id}")
+
+@router.get("/exchanges/{exchange_id}/volume_chart", response_model=List[VolumeChartData], tags=["Exchanges"])
+def get_exchange_volume_chart(exchange_id: str, days: int):
+    """
+    Obtiene datos de volumen de un exchange en los últimos días.
+    
+    - **exchange_id**: ID del exchange (ej. 'binance')
+    - **days**: Número de días (ej. 7, 30, 90)
+    """
+    try:
+        volume_data = client.get_exchanges_volume_chart_by_id(id=exchange_id, days=days)
+        return [VolumeChartData(timestamp=item[0], volume=item[1]) for item in volume_data]
+    except Exception as e:
+        raise handle_api_error(e, f"Error al obtener datos de volumen del exchange {exchange_id}")
+
+#===================================================================================
+# ENDPOINTS DE TENDENCIAS Y BÚSQUEDA
+#===================================================================================
+
+@router.get("/search/trending", response_model=TrendingCoins, tags=["Search"])
+def get_search_trending():
+    """Obtiene las criptomonedas más buscadas."""
+    try:
+        trending_data = client.get_search_trending()
+        return TrendingCoins(**trending_data)
+    except Exception as e:
+        raise handle_api_error(e, "Error al obtener criptomonedas más buscadas")
+
+#===================================================================================
+# ENDPOINTS DE PRECIOS Y MONEDAS
+#===================================================================================
+
+@router.get("/simple/price", response_model=Dict[str, Any], tags=["Prices"])
+def get_token_price(id: str, contract_addresses: str, vs_currencies: str):
+    """
+    Obtiene el precio de un token específico por su ID y dirección de contrato.
+    
+    - **id**: ID de la plataforma (ej. 'ethereum')
+    - **contract_addresses**: Direcciones de contrato separadas por comas
+    - **vs_currencies**: Monedas de referencia separadas por comas (ej. 'usd,eur')
+    """
+    try:
+        price_data = client.get_token_price(
+            id=id, 
+            contract_addresses=contract_addresses, 
+            vs_currencies=vs_currencies
+        )
+        return price_data
+    except Exception as e:
+        raise handle_api_error(e, f"Error al obtener precio del token")
+
+@router.get("/simple/supported_vs_currencies", response_model=List[str], tags=["Prices"])
+def get_supported_vs_currencies():
+    """Obtiene una lista de todas las monedas compatibles."""
+    try:
+        currencies = client.get_supported_vs_currencies()
+        return currencies
+    except Exception as e:
+        raise handle_api_error(e, "Error al obtener lista de monedas compatibles")
+
+#===================================================================================
+# ENDPOINTS DE PLATAFORMAS DE ACTIVOS
+#===================================================================================
+
+@router.get("/asset_platforms", response_model=List[AssetPlatform], tags=["Platforms"])
+def get_asset_platforms():
+    """Obtiene una lista de todas las plataformas de activos."""
+    try:
+        platforms = client.get_asset_platforms()
+        return [AssetPlatform(**platform) for platform in platforms]
+    except Exception as e:
+        raise handle_api_error(e, "Error al obtener lista de plataformas de activos")
+
+#===================================================================================
+# ENDPOINTS DE TASAS DE CAMBIO
+#===================================================================================
+
+@router.get("/exchange_rates", response_model=ExchangeRates, tags=["Rates"])
+def get_exchange_rates():
+    """Obtiene las tasas de cambio actuales."""
+    try:
+        rates = client.get_exchange_rates()
+        return ExchangeRates(**rates)
+    except Exception as e:
+        raise handle_api_error(e, "Error al obtener tasas de cambio")
+    
+#===================================================================================
+# FIN DE ENDPOINTS
+#===================================================================================
