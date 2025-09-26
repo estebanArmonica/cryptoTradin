@@ -371,6 +371,17 @@ class IndexDetail(BaseModel):
 #=========================================================================================
 # Modelos para respuestas de búsqueda y filtros
 #=========================================================================================
+class SearchQuery(BaseModel):
+    """
+    Modelo de consulta de búsqueda.
+    """
+    id: str
+    name: str
+    api_symbol: str
+    symbol: str
+    market_cap_rank: Optional[int] = None
+    thumb: str
+    large: str
 
 class SearchResponse(BaseModel):
     """
@@ -518,18 +529,6 @@ class ContractMarketData(BaseModel):
 #=============================================================================
 # FIN DE MODELOS NUEVOS
 #=============================================================================
-
-class SearchQuery(BaseModel):
-    """
-    Modelo de consulta de búsqueda.
-    """
-    id: str
-    name: str
-    api_symbol: str
-    symbol: str
-    market_cap_rank: Optional[int] = None
-    thumb: str
-    large: str
 
 class TradingSignal(BaseModel):
     """Modelo para señales de trading."""
