@@ -6,84 +6,190 @@ class CoinbaseWalletManager {
         this.accountBalances = {};
         this.supportedChains = ['EVM', 'Solana'];
         this.isConnected = false;
-        this.sessionToken = localStorage.getItem('session_token');
-        this.currentLoadingModal = null; // ✅ Nueva propiedad
-        this.loadingTimeout = null; // ✅ Timeout de seguridad
+        this.isProcessing = false;
+        this.currentLoadingModal = null;
+        this.loadingTimeout = null;
+        this.lastOperationTime = 0;
 
-        this.initializeEventListeners();
-        this.checkExistingConnection();
+        console.log('🔄 CoinbaseWalletManager constructor llamado');
+        
+        // Inicialización diferida para asegurar que el DOM esté listo
+        setTimeout(() => {
+            this.initializeEventListeners();
+            this.checkExistingConnection();
+        }, 100);
     }
 
     // ===== INITIALIZATION =====
     initializeEventListeners() {
-        // Conectar wallet
-        document.getElementById('connectCoinbaseBtn')?.addEventListener('click', () => {
-            this.connectWallet();
-        });
+        console.log('🔧 Inicializando event listeners de Coinbase Wallet');
+        
+        try {
+            // Conectar wallet - MÚLTIPLES BOTONES
+            const connectButtons = [
+                'connectCoinbaseBtn', 
+                'connectCoinbaseBtn2'
+            ];
+            
+            connectButtons.forEach(btnId => {
+                const btn = document.getElementById(btnId);
+                if (btn) {
+                    btn.addEventListener('click', () => {
+                        console.log(`🖱️ Botón ${btnId} clickeado`);
+                        this.connectWallet();
+                    });
+                } else {
+                    console.warn(`⚠️ Botón ${btnId} no encontrado`);
+                }
+            });
 
-        // Desconectar wallet
-        document.getElementById('disconnectCoinbaseBtn')?.addEventListener('click', () => {
-            this.disconnectWallet();
-        });
+            // Desconectar wallet
+            const disconnectButtons = [
+                'disconnectCoinbaseBtn',
+                'disconnectCoinbaseBtn2'
+            ];
+            
+            disconnectButtons.forEach(btnId => {
+                const btn = document.getElementById(btnId);
+                if (btn) {
+                    btn.addEventListener('click', () => {
+                        this.disconnectWallet();
+                    });
+                }
+            });
 
-        // Crear cuenta EVM
-        document.getElementById('createEVMAccountBtn')?.addEventListener('click', () => {
-            this.createEVMAccount();
-        });
+            // Crear cuenta EVM
+            const evmBtn = document.getElementById('createEVMAccountBtn');
+            if (evmBtn) {
+                evmBtn.addEventListener('click', () => {
+                    this.createEVMAccount();
+                });
+            }
 
-        // Crear cuenta Solana
-        document.getElementById('createSolanaAccountBtn')?.addEventListener('click', () => {
-            this.createSolanaAccount();
-        });
+            // Crear cuenta Solana
+            const solanaBtn = document.getElementById('createSolanaAccountBtn');
+            if (solanaBtn) {
+                solanaBtn.addEventListener('click', () => {
+                    this.createSolanaAccount();
+                });
+            }
 
-        // Importar cuenta
-        document.getElementById('importAccountBtn')?.addEventListener('click', () => {
-            this.importAccount();
-        });
+            // Importar cuenta
+            const importBtn = document.getElementById('importAccountBtn');
+            if (importBtn) {
+                importBtn.addEventListener('click', () => {
+                    this.importAccount();
+                });
+            }
 
-        // Actualizar balances
-        document.getElementById('refreshBalancesBtn')?.addEventListener('click', () => {
-            this.loadAccountBalances();
-        });
+            // Actualizar balances
+            const refreshButtons = [
+                'refreshBalancesBtn',
+                'refreshBalancesBtn2',
+                'refreshAllBtn'
+            ];
+            
+            refreshButtons.forEach(btnId => {
+                const btn = document.getElementById(btnId);
+                if (btn) {
+                    btn.addEventListener('click', () => {
+                        this.loadAccountBalances();
+                    });
+                }
+            });
 
-        // Formulario de transferencia
-        document.getElementById('transferForm')?.addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.handleTransfer();
-        });
-    }
+            // Formulario de transferencia
+            const transferForm = document.getElementById('transferForm');
+            if (transferForm) {
+                transferForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.handleTransfer();
+                });
+            }
 
-    checkExistingConnection() {
-        const savedAccount = localStorage.getItem('coinbase_connected_account');
-        if (savedAccount) {
-            this.connectedAccount = JSON.parse(savedAccount);
-            this.updateConnectionStatus(true);
-            this.loadAccountBalances();
+            console.log('✅ Todos los event listeners configurados correctamente');
+
+        } catch (error) {
+            console.error('❌ Error inicializando event listeners:', error);
         }
     }
 
-    // ===== AUTHENTICATION HELPERS (FIXED) =====
+    checkExistingConnection() {
+        console.log('🔍 Verificando conexión existente...');
+        
+        try {
+            const savedAccount = localStorage.getItem('coinbase_connected_account');
+            if (savedAccount) {
+                console.log('📁 Cuenta guardada encontrada en localStorage');
+                
+                try {
+                    this.connectedAccount = JSON.parse(savedAccount);
+                    console.log('✅ Cuenta parseada:', this.connectedAccount);
+                    
+                    // ✅ CORREGIDO: Actualizar la información de la cuenta PRIMERO
+                    this.updateAccountInfo(this.connectedAccount);
+                    this.updateConnectionStatus(true);
+                    
+                    // Cargar balances después de un breve delay
+                    setTimeout(() => {
+                        this.loadAccountBalances();
+                    }, 500);
+                    
+                    this.showSuccess('✅ Wallet de Coinbase reconectado automáticamente');
+                    
+                } catch (error) {
+                    console.error('❌ Error parseando cuenta guardada:', error);
+                    localStorage.removeItem('coinbase_connected_account');
+                }
+            } else {
+                console.log('ℹ️ No hay cuenta guardada en localStorage');
+            }
+        } catch (error) {
+            console.error('❌ Error verificando conexión existente:', error);
+        }
+    }
+
+    // ===== AUTHENTICATION HELPERS =====
     async fetchWithAuth(url, options = {}) {
+        console.log(`🌐 Fetching: ${url}`, options);
+        
+        // Solo prevenir operaciones de escritura simultáneas
+        const isWriteOperation = options.method && options.method !== 'GET';
+        
+        if (isWriteOperation && this.isProcessing) {
+            console.warn('⏳ Operación ya en progreso, saltando solicitud de escritura');
+            this.showInfo('⌛ Hay una operación en progreso. Espere...');
+            return null;
+        }
+
         const defaultOptions = {
             headers: {
                 'Content-Type': 'application/json',
             },
-            credentials: 'include'
+            credentials: 'include',
+            timeout: 30000 // 30 segundos timeout
         };
 
         try {
-            const response = await fetch(url, { ...defaultOptions, ...options });
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000);
+            
+            const response = await fetch(url, { 
+                ...defaultOptions, 
+                ...options,
+                signal: controller.signal 
+            });
+            
+            clearTimeout(timeoutId);
 
-            // Manejar específicamente errores 401
+            console.log(`📨 Response status: ${response.status} for ${url}`);
+
             if (response.status === 401) {
-                // Para endpoints de Coinbase, no redirigir inmediatamente
                 if (url.includes('/api/coinbase')) {
-                    this.showError('Sesión expirada. Por favor, recarga la página.');
+                    this.showError('🔐 Sesión expirada. Por favor, recarga la página.');
                     return null;
                 }
-
-                // Para otros endpoints, redirigir después de mostrar un mensaje
-                this.showError('Sesión expirada. Redirigiendo al login...');
+                this.showError('🔐 Sesión expirada. Redirigiendo al login...');
                 setTimeout(() => {
                     window.location.href = '/';
                 }, 2000);
@@ -91,199 +197,302 @@ class CoinbaseWalletManager {
             }
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                let errorMessage = `Error HTTP! status: ${response.status}`;
+                
+                try {
+                    const errorText = await response.text();
+                    console.error(`❌ Error response:`, errorText);
+                    
+                    try {
+                        const errorData = JSON.parse(errorText);
+                        errorMessage = errorData.error || errorData.detail || errorMessage;
+                    } catch {
+                        errorMessage = errorText || errorMessage;
+                    }
+                } catch (textError) {
+                    console.error('❌ Error leyendo respuesta de error:', textError);
+                }
+                
+                throw new Error(errorMessage);
             }
 
-            return await response.json();
+            const responseData = await response.json();
+            console.log(`✅ Success response from ${url}:`, responseData);
+            return responseData;
+            
         } catch (error) {
-            console.error('API request failed:', error);
+            console.error(`❌ API request failed for ${url}:`, error);
 
-            // No redirigir por errores de red
-            if (error.name === 'TypeError') {
-                this.showError('Error de conexión. Verifica tu conexión a internet.');
+            if (error.name === 'AbortError') {
+                this.showError('⏰ Timeout: La solicitud tardó demasiado tiempo.');
                 return null;
             }
 
-            this.showError(`Error: ${error.message}`);
+            if (error.name === 'TypeError') {
+                this.showError('🌐 Error de conexión. Verifica tu conexión a internet.');
+                return null;
+            }
+
+            const errorMessage = error.message.includes('Error desconocido') ? 
+                'Error en el servidor. Intente nuevamente.' : error.message;
+                
+            this.showError(`❌ Error: ${errorMessage}`);
             return null;
         }
     }
 
-    // En las funciones como connectWallet, crear cuenta, etc.:
+    // ===== WALLET OPERATIONS =====
     async connectWallet() {
-        const accountName = document.getElementById('accountNameInput')?.value.trim();
+        console.log('🔗 Iniciando conexión de wallet...');
+        
+        if (this.isProcessing) {
+            console.warn('⏳ Conexión ya en progreso, ignorando solicitud');
+            this.showInfo('⌛ Conectando wallet... Espere por favor.');
+            return;
+        }
+        
+        this.isProcessing = true;
+        this.lastOperationTime = Date.now();
+        
+        const accountNameInput = document.getElementById('accountNameInput');
+        const accountName = accountNameInput ? accountNameInput.value.trim() : '';
 
-        this.showLoading('Conectando con Coinbase...');
+        console.log(`📝 Nombre de cuenta proporcionado: "${accountName}"`);
+
+        this.showLoading('🔗 Conectando con Coinbase Wallet...', 20000);
 
         try {
-            // Primero probamos la conexión
+            // Primero probamos la conexión con el servidor
+            console.log('🔄 Probando conexión con el servidor...');
             const connectionTest = await this.fetchWithAuth(`${this.baseUrl}/test-connection`);
 
             if (!connectionTest) {
-                this.hideLoading();
-                return;
+                throw new Error('No se pudo verificar la conexión con el servidor');
             }
+
+            console.log('✅ Conexión con servidor exitosa:', connectionTest);
 
             if (!connectionTest.success) {
-                throw new Error('No se pudo establecer conexión con Coinbase CDP');
+                throw new Error(connectionTest.error || 'No se pudo establecer conexión con Coinbase CDP');
             }
 
-            // Obtenemos o creamos una cuenta
-            const accountData = await this.fetchWithAuth(`${this.baseUrl}/evm/get-or-create`);
-
-            if (!accountData) {
-                this.hideLoading();
-                return;
+            // Intentar crear o obtener cuenta
+            let accountData;
+            const requestBody = accountName ? { name: accountName } : {};
+            
+            console.log('🔄 Creando/obteniendo cuenta EVM...');
+            
+            try {
+                accountData = await this.fetchWithAuth(`${this.baseUrl}/evm/create`, {
+                    method: 'POST',
+                    body: JSON.stringify(requestBody)
+                });
+                
+                if (!accountData) {
+                    throw new Error('No se pudo crear la cuenta');
+                }
+                
+            } catch (createError) {
+                console.warn('⚠️ Create falló, intentando obtener cuenta existente:', createError);
+                
+                // Intentar obtener cuenta existente
+                accountData = await this.fetchWithAuth(`${this.baseUrl}/evm/accounts`);
+                
+                if (accountData && accountData.success && accountData.accounts && accountData.accounts.length > 0) {
+                    console.log('✅ Usando cuenta existente');
+                    accountData = {
+                        success: true,
+                        account: accountData.accounts[0]
+                    };
+                } else {
+                    throw new Error('No se pudo crear ni obtener una cuenta existente');
+                }
             }
 
-            if (accountData.success) {
-                this.connectedAccount = accountData.account;
-                this.saveConnection();
-                this.updateConnectionStatus(true);
-
-                // ocultamos loading antes de mostrar éxito
-                this.hideLoading();
-                this.showSuccess('Wallet de Coinbase conectado exitosamente');
-
-                // Cargar balances
-                await this.loadAccountBalances();
-            } else {
-                throw new Error(accountData.error || 'Error al obtener la cuenta');
+            if (!accountData.success) {
+                const errorMsg = accountData.error || accountData.message || 'Error desconocido al crear cuenta';
+                throw new Error(errorMsg);
             }
+
+            console.log('✅ Cuenta obtenida exitosamente:', accountData.account);
+
+            this.connectedAccount = accountData.account;
+            this.saveConnection();
+            
+            // ✅ CORREGIDO: Actualizar la información de la cuenta ANTES de cambiar el estado
+            this.updateAccountInfo(this.connectedAccount);
+            this.updateConnectionStatus(true);
+
+            this.hideLoading();
+            this.showSuccess(`✅ Wallet de Coinbase conectado correctamente! 
+                            <br><small>Cuenta: ${this.formatAddress(this.connectedAccount.address)}</small>`);
+
+            // Cargar balances después de conectar
+            setTimeout(() => {
+                this.loadAccountBalances();
+            }, 1000);
 
         } catch (error) {
+            console.error('❌ Error conectando wallet:', error);
             this.hideLoading();
-            // Solo mostrar error si no es un error de autenticación (ya manejado)
-            if (!error.message.includes('Sesión expirada')) {
-                this.showError(`Error conectando wallet: ${error.message}`);
-            }
+            this.showError(`❌ Error conectando wallet: ${error.message}`);
         } finally {
-            this.hideLoading();
+            this.isProcessing = false;
+            console.log('🔚 Proceso de conexión finalizado');
         }
     }
 
     disconnectWallet() {
+        console.log('🔌 Desconectando wallet...');
+        
+        const accountAddress = this.connectedAccount ? 
+            this.formatAddress(this.connectedAccount.address) : '';
+
         localStorage.removeItem('coinbase_connected_account');
         this.connectedAccount = null;
         this.accountBalances = {};
+        this.isProcessing = false;
         this.updateConnectionStatus(false);
         this.clearAccountInfo();
-        this.showSuccess('Wallet desconectado exitosamente');
-    }
-
-    // ===== MODAL MANAGEMENT =====
-    closeAnyOpenModals() {
-        try {
-            // Cerrar todos los modales de manera segura
-            const openModals = document.querySelectorAll('.modal.show');
-            openModals.forEach(modal => {
-                const modalId = modal.id;
-                if (modalId) {
-                    this.closeModalSafely(modalId);
-                } else {
-                    this.closeModalManually(modal);
-                }
-            });
-
-            // Limpieza final
-            setTimeout(() => {
-                this.cleanupModalBackdrops();
-            }, 100);
-        } catch (error) {
-            console.error('Error closing open modals:', error);
-            this.cleanupModalBackdrops();
-        }
+        
+        this.showSuccess(`🔌 Wallet de Coinbase desconectado correctamente!
+                        ${accountAddress ? `<br><small>Cuenta: ${accountAddress}</small>` : ''}`);
     }
 
     // ===== ACCOUNT MANAGEMENT =====
     async createEVMAccount() {
-        const accountName = prompt('Ingresa un nombre para la cuenta EVM (opcional):');
+        if (this.isProcessing) {
+            this.showInfo('⌛ Operación en progreso. Espere...');
+            return;
+        }
 
-        this.showLoading('Creando cuenta EVM...');
+        this.isProcessing = true;
+        const accountName = prompt('Ingresa un nombre para la cuenta EVM (opcional):');
+        
+        if (accountName === null) {
+            this.isProcessing = false;
+            return;
+        }
+
+        this.showLoading('🔄 Creando cuenta EVM...', 15000);
 
         try {
-            const response = await this.handleApiResponse(
-                async () => {
-                    const requestBody = accountName ? { name: accountName } : {};
-                    return await this.fetchWithAuth(`${this.baseUrl}/evm/create`, {
-                        method: 'POST',
-                        body: JSON.stringify(requestBody)
-                    });
-                },
-                `Cuenta EVM creada exitosamente`,
-                'Creando cuenta EVM...'
-            );
+            const requestBody = accountName ? { name: accountName } : {};
+            const response = await this.fetchWithAuth(`${this.baseUrl}/evm/create`, {
+                method: 'POST',
+                body: JSON.stringify(requestBody)
+            });
 
-            if (response) {
-                // ✅ Actualizar la cuenta conectada
+            if (!response) {
+                throw new Error('No se recibió respuesta del servidor');
+            }
+
+            if (response.success) {
+                this.hideLoading();
+                this.showSuccess(`✅ Cuenta EVM creada exitosamente!
+                                <br><small>Dirección: ${this.formatAddress(response.account.address)}</small>`);
+
                 this.connectedAccount = response.account;
                 this.saveConnection();
                 this.updateAccountInfo(response.account);
-
-                // ✅ Actualizar la lista de balances
                 await this.loadAccountBalances();
-
-                // ✅ Cerrar cualquier modal abierto
                 this.closeAnyOpenModals();
             } else {
-                throw new Error(response?.error || 'Error desconocido');
+                const errorMsg = response.error || response.message || 'Error al crear la cuenta EVM';
+                throw new Error(errorMsg);
             }
 
         } catch (error) {
+            console.error('Error creating EVM account:', error);
             this.hideLoading();
-            this.showError(`Error creando cuenta EVM: ${error.message}`);
+            this.showError(`❌ Error creando cuenta EVM: ${error.message}`);
+        } finally {
+            this.isProcessing = false;
         }
     }
 
     async createSolanaAccount() {
+        if (this.isProcessing) {
+            this.showInfo('⌛ Operación en progreso. Espere...');
+            return;
+        }
+
+        this.isProcessing = true;
         const accountName = prompt('Ingresa un nombre para la cuenta Solana (opcional):');
 
-        this.showLoading('Creando cuenta Solana...');
+        if (accountName === null) {
+            this.isProcessing = false;
+            return;
+        }
 
         try {
-            const response = await this.handleApiResponse(
-                async () => {
-                    const requestBody = accountName ? { name: accountName } : {};
-                    return await this.fetchWithAuth(`${this.baseUrl}/solana/create`, {
-                        method: 'POST',
-                        body: JSON.stringify(requestBody)
-                    });
-                },
-                `Cuenta Solana creada exitosamente`,
-                'Creando cuenta Solana...'
-            );
+            this.showLoading('🔄 Creando cuenta Solana...', 15000);
 
+            const requestBody = accountName ? { name: accountName } : {};
+            const response = await this.fetchWithAuth(`${this.baseUrl}/solana/create`, {
+                method: 'POST',
+                body: JSON.stringify(requestBody)
+            });
 
-            if (response) {
+            if (!response) {
+                throw new Error('No se recibió respuesta del servidor');
+            }
+
+            if (response.success) {
+                this.hideLoading();
+                this.showSuccess(`✅ Cuenta Solana creada exitosamente!
+                                <br><small>Dirección: ${this.formatAddress(response.account.address)}</small>`);
+
                 this.connectedAccount = response.account;
                 this.saveConnection();
                 this.updateAccountInfo(response.account);
                 await this.loadAccountBalances();
                 this.closeAnyOpenModals();
             } else {
-                throw new Error(response?.error || 'Error desconocido');
+                const errorMsg = response.error || response.message || 'Error al crear la cuenta Solana';
+                throw new Error(errorMsg);
             }
 
         } catch (error) {
             console.error('Error creating Solana account:', error);
             this.hideLoading();
-            this.showError(`Error creando cuenta Solana: ${error.message}`);
+            this.showError(`❌ Error creando cuenta Solana: ${error.message}`);
+        } finally {
+            this.isProcessing = false;
         }
     }
 
     async importAccount() {
+        if (this.isProcessing) {
+            this.showInfo('⌛ Operación en progreso. Espere...');
+            return;
+        }
+
+        this.isProcessing = true;
+
         const chain = prompt('Selecciona la blockchain (EVM o Solana):');
+        if (chain === null) {
+            this.isProcessing = false;
+            return;
+        }
+
         const privateKey = prompt('Ingresa la clave privada:');
+        if (privateKey === null) {
+            this.isProcessing = false;
+            return;
+        }
+
         const accountName = prompt('Ingresa un nombre para la cuenta (opcional):');
 
         if (!chain || !privateKey) {
             this.showError('Chain y clave privada son requeridos');
+            this.isProcessing = false;
             return;
         }
 
-        this.showLoading('Importando cuenta...');
-
         try {
+            this.showLoading('📥 Importando cuenta...', 15000);
+
             const endpoint = chain.toLowerCase() === 'solana' ? 'solana/import' : 'evm/import';
             const response = await this.fetchWithAuth(`${this.baseUrl}/${endpoint}`, {
                 method: 'POST',
@@ -293,43 +502,48 @@ class CoinbaseWalletManager {
                 })
             });
 
-            if (response && response.success) {
-                // ✅ Cerrar el modal de loading primero
+            if (!response) {
+                throw new Error('No se recibió respuesta del servidor');
+            }
+
+            if (response.success) {
                 this.hideLoading();
+                this.showSuccess(`✅ Cuenta importada exitosamente!
+                                <br><small>Dirección: ${this.formatAddress(response.account.address)}</small>`);
 
-                // ✅ Mostrar mensaje de éxito
-                this.showSuccess(`Cuenta importada: ${response.account.address}`);
-
-                // ✅ Actualizar la cuenta conectada
                 this.connectedAccount = response.account;
                 this.saveConnection();
                 this.updateAccountInfo(response.account);
-
-                // ✅ Actualizar la lista de balances
                 await this.loadAccountBalances();
-
-                // ✅ Cerrar cualquier modal abierto
                 this.closeAnyOpenModals();
-
             } else {
-                throw new Error(response?.error || 'Error desconocido');
+                const errorMsg = response.error || response.message || 'Error al importar la cuenta';
+                throw new Error(errorMsg);
             }
 
         } catch (error) {
+            console.error('Error importing account:', error);
             this.hideLoading();
-            this.showError(`Error importando cuenta: ${error.message}`);
+            this.showError(`❌ Error importando cuenta: ${error.message}`);
+        } finally {
+            this.isProcessing = false;
         }
     }
 
     // ===== BALANCE MANAGEMENT =====
     async loadAccountBalances() {
-        if (!this.connectedAccount) return;
+        if (this.isProcessing) {
+            console.log('💰 Carga de balances diferida por operación de escritura');
+            return;
+        }
 
-        this.showLoading('Cargando balances...');
+        console.log('💰 Cargando balances de cuenta...');
+        this.showLoading('💰 Cargando balances...', 10000);
 
         try {
-            // Aquí implementarías la lógica para obtener balances reales
-            // Por ahora usamos datos de ejemplo
+            // Simular balances para demostración
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
             this.accountBalances = {
                 'EVM': {
                     'ETH': { balance: '0.5', valueUSD: '1500.00' },
@@ -344,10 +558,27 @@ class CoinbaseWalletManager {
 
             this.renderBalances();
             this.calculateTotalPortfolio();
-            this.showSuccess('Balances actualizados');
+            this.showSuccess('✅ Balances actualizados correctamente');
 
         } catch (error) {
-            this.showError(`Error cargando balances: ${error.message}`);
+            console.error('Error loading balances:', error);
+            
+            // Fallback a datos de ejemplo
+            this.accountBalances = {
+                'EVM': {
+                    'ETH': { balance: '0.5', valueUSD: '1500.00' },
+                    'USDC': { balance: '1000.0', valueUSD: '1000.00' }
+                },
+                'Solana': {
+                    'SOL': { balance: '10.5', valueUSD: '1050.00' },
+                    'USDT': { balance: '500.0', valueUSD: '500.00' }
+                }
+            };
+            
+            this.renderBalances();
+            this.calculateTotalPortfolio();
+            this.showInfo('ℹ️ Usando datos de ejemplo - Error cargando balances reales');
+            
         } finally {
             this.hideLoading();
         }
@@ -355,16 +586,22 @@ class CoinbaseWalletManager {
 
     renderBalances() {
         const container = document.getElementById('tokensList');
-        if (!container) return;
+        if (!container) {
+            console.warn('❌ Contenedor tokensList no encontrado');
+            return;
+        }
 
         let html = '';
 
         Object.keys(this.accountBalances).forEach(chain => {
+            const chainBalances = this.accountBalances[chain];
+            if (Object.keys(chainBalances).length === 0) return;
+
             html += `<div class="chain-section mb-4">
                         <h6 class="text-muted mb-3"><i class="fas fa-link me-2"></i>${chain}</h6>`;
 
-            Object.keys(this.accountBalances[chain]).forEach(token => {
-                const balance = this.accountBalances[chain][token];
+            Object.keys(chainBalances).forEach(token => {
+                const balance = chainBalances[token];
                 html += this.createTokenCard(token, balance, chain);
             });
 
@@ -377,33 +614,37 @@ class CoinbaseWalletManager {
                 <p class="text-muted">No se encontraron balances</p>
             </div>
         `;
+        
+        console.log('✅ Balances renderizados correctamente');
     }
 
     createTokenCard(token, balance, chain) {
         const icons = {
-            'ETH': 'fab fa-ethereum',
-            'BTC': 'fab fa-bitcoin',
-            'SOL': 'fas fa-sun',
-            'USDC': 'fas fa-dollar-sign',
-            'USDT': 'fas fa-coins',
-            'WBTC': 'fab fa-btc'
+            'ETH': 'fab fa-ethereum text-primary',
+            'BTC': 'fab fa-bitcoin text-warning',
+            'SOL': 'fas fa-sun text-warning',
+            'USDC': 'fas fa-dollar-sign text-success',
+            'USDT': 'fas fa-coins text-info',
+            'WBTC': 'fab fa-btc text-orange'
         };
 
         return `
-            <div class="token-card">
-                <div class="d-flex align-items-center">
-                    <div class="token-icon me-3">
-                        <i class="${icons[token] || 'fas fa-coins'}"></i>
-                    </div>
-                    <div class="flex-grow-1">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="mb-1">${token}</h6>
-                                <small class="text-muted">${chain}</small>
-                            </div>
-                            <div class="text-end">
-                                <div class="fw-bold">${balance.balance}</div>
-                                <small class="text-success">$${balance.valueUSD}</small>
+            <div class="token-card card mb-2">
+                <div class="card-body py-2">
+                    <div class="d-flex align-items-center">
+                        <div class="token-icon me-3">
+                            <i class="${icons[token] || 'fas fa-coins text-muted'} fa-lg"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1 fw-bold">${token}</h6>
+                                    <small class="text-muted">${chain}</small>
+                                </div>
+                                <div class="text-end">
+                                    <div class="fw-bold text-dark">${balance.balance}</div>
+                                    <small class="text-success">$${balance.valueUSD}</small>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -421,12 +662,25 @@ class CoinbaseWalletManager {
             });
         });
 
-        document.getElementById('totalPortfolioValue').textContent =
-            `$${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
+        const totalElement = document.getElementById('totalPortfolioValue');
+        if (totalElement) {
+            totalElement.textContent = `$${total.toLocaleString('en-US', { 
+                minimumFractionDigits: 2, 
+                maximumFractionDigits: 2 
+            })} USD`;
+        }
+        
+        console.log(`💰 Valor total del portfolio: $${total}`);
     }
 
     // ===== TRANSFER FUNCTIONS =====
     async handleTransfer() {
+        if (this.isProcessing) {
+            this.showInfo('⌛ Operación en progreso. Espere...');
+            return;
+        }
+        this.isProcessing = true;
+
         const formData = new FormData(document.getElementById('transferForm'));
         const transferData = {
             fromAccount: formData.get('fromAccount'),
@@ -437,26 +691,47 @@ class CoinbaseWalletManager {
             memo: formData.get('memo')
         };
 
-        if (!this.validateTransfer(transferData)) return;
+        console.log('📤 Datos de transferencia:', transferData);
 
-        this.showLoading('Procesando transferencia...');
+        if (!this.validateTransfer(transferData)) {
+            this.isProcessing = false;
+            return;
+        }
+
+        this.showLoading('🔄 Procesando transferencia...', 20000);
 
         try {
-            // Aquí implementarías la lógica real de transferencia
-            // Por ahora simulamos una transferencia exitosa
-            await this.simulateTransfer(transferData);
+            const result = await this.executeTransfer(transferData);
 
-            this.showSuccess(`Transferencia de ${transferData.amount} ${transferData.token} enviada exitosamente`);
-            document.getElementById('transferForm').reset();
-
-            // Actualizar balances
-            setTimeout(() => this.loadAccountBalances(), 2000);
+            if (result && result.success) {
+                this.showSuccess(`✅ Transferencia completada!
+                                <br><small>${transferData.amount} ${transferData.token} enviados correctamente</small>`);
+                document.getElementById('transferForm').reset();
+                setTimeout(() => this.loadAccountBalances(), 2000);
+            } else {
+                throw new Error(result?.error || 'Error en la transferencia');
+            }
 
         } catch (error) {
-            this.showError(`Error en transferencia: ${error.message}`);
+            console.error('Transfer error:', error);
+            this.showError(`❌ Error en transferencia: ${error.message}`);
         } finally {
+            this.isProcessing = false;
             this.hideLoading();
         }
+    }
+
+    async executeTransfer(transferData) {
+        console.log(`🔄 Ejecutando transferencia en ${transferData.chain}`);
+        
+        // Simular transferencia exitosa para demostración
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        return {
+            success: true,
+            transaction_hash: '0x' + Math.random().toString(16).substr(2, 64),
+            message: 'Transferencia simulada exitosamente'
+        };
     }
 
     validateTransfer(transferData) {
@@ -478,23 +753,18 @@ class CoinbaseWalletManager {
         return true;
     }
 
-    async simulateTransfer(transferData) {
-        // Simular delay de red
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        // Simular transacción exitosa
-        return {
-            success: true,
-            transactionHash: '0x' + Math.random().toString(16).substr(2, 64),
-            timestamp: new Date().toISOString()
-        };
-    }
-
-    // ===== UI UPDATES =====
+    // ===== UI MANAGEMENT =====
     updateConnectionStatus(connected) {
         this.isConnected = connected;
+        
+        console.log(`🔄 Actualizando estado de conexión: ${connected}`);
+        
         const statusElement = document.getElementById('connectionStatus');
         const accountInfo = document.getElementById('accountInfo');
+        const connectBtn = document.getElementById('connectCoinbaseBtn');
+        const disconnectBtn = document.getElementById('disconnectCoinbaseBtn');
+        const connectBtn2 = document.getElementById('connectCoinbaseBtn2');
+        const disconnectBtn2 = document.getElementById('disconnectCoinbaseBtn2');
 
         if (statusElement) {
             statusElement.style.display = connected ? 'inline-block' : 'none';
@@ -504,55 +774,127 @@ class CoinbaseWalletManager {
             accountInfo.style.display = connected ? 'block' : 'none';
         }
 
-        // Mostrar/ocultar botones según conexión
-        document.getElementById('connectCoinbaseBtn').style.display = connected ? 'none' : 'block';
-        document.getElementById('disconnectCoinbaseBtn').style.display = connected ? 'block' : 'none';
+        // Actualizar todos los botones de conexión/desconexión
+        [connectBtn, connectBtn2].forEach(btn => {
+            if (btn) btn.style.display = connected ? 'none' : 'block';
+        });
+        
+        [disconnectBtn, disconnectBtn2].forEach(btn => {
+            if (btn) btn.style.display = connected ? 'block' : 'none';
+        });
+
+        console.log('✅ Estado de conexión actualizado');
     }
 
     updateAccountInfo(account) {
-        document.getElementById('accountName').textContent = account.name || account.address;
-        document.getElementById('accountAddress').textContent = account.address;
-        document.getElementById('accountType').textContent = account.type;
-        document.getElementById('lastUpdate').textContent = new Date().toLocaleString();
+        console.log('📝 Actualizando información de cuenta:', account);
+        
+        const accountName = document.getElementById('accountName');
+        const accountAddress = document.getElementById('accountAddress');
+        const accountType = document.getElementById('accountType');
+        const lastUpdate = document.getElementById('lastUpdate');
+
+        console.log('🔍 Elementos encontrados:', {
+            accountName: !!accountName,
+            accountAddress: !!accountAddress,
+            accountType: !!accountType,
+            lastUpdate: !!lastUpdate
+        });
+
+        if (accountName) {
+            accountName.textContent = account.name || account.address || 'No disponible';
+            console.log('✅ Nombre actualizado:', accountName.textContent);
+        } else {
+            console.error('❌ Elemento accountName no encontrado');
+        }
+        
+        if (accountAddress) {
+            accountAddress.textContent = account.address || 'No disponible';
+            console.log('✅ Dirección actualizada:', accountAddress.textContent);
+        } else {
+            console.error('❌ Elemento accountAddress no encontrado');
+        }
+        
+        if (accountType) {
+            accountType.textContent = account.type || 'EVM'; // Valor por defecto
+            console.log('✅ Tipo actualizado:', accountType.textContent);
+        } else {
+            console.error('❌ Elemento accountType no encontrado');
+        }
+        
+        if (lastUpdate) {
+            lastUpdate.textContent = new Date().toLocaleString();
+            console.log('✅ Última actualización:', lastUpdate.textContent);
+        } else {
+            console.error('❌ Elemento lastUpdate no encontrado');
+        }
+        
+        // Auto-completar formulario de transferencia
+        const fromAccountInput = document.getElementById('fromAccount');
+        if (fromAccountInput && account.address) {
+            fromAccountInput.value = account.address;
+            console.log('✅ Formulario auto-completado:', fromAccountInput.value);
+        }
+
+        console.log('✅ Información de cuenta actualizada completamente');
     }
 
     clearAccountInfo() {
-        document.getElementById('accountName').textContent = '-';
-        document.getElementById('accountAddress').textContent = '-';
-        document.getElementById('accountType').textContent = '-';
-        document.getElementById('lastUpdate').textContent = '-';
-        document.getElementById('tokensList').innerHTML = `
-            <div class="text-center py-4">
-                <i class="fas fa-coins fa-3x text-muted mb-3"></i>
-                <p class="text-muted">Conecta tu wallet de Coinbase para ver tus tokens</p>
-            </div>
-        `;
-        document.getElementById('totalPortfolioValue').textContent = '$0.00 USD';
+        console.log('🧹 Limpiando información de cuenta');
+        
+        this.updateAccountInfo({
+            name: '-',
+            address: '-',
+            type: '-'
+        });
+        
+        const tokensList = document.getElementById('tokensList');
+        const totalPortfolio = document.getElementById('totalPortfolioValue');
+        
+        if (tokensList) {
+            tokensList.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-coins fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">Conecta tu wallet de Coinbase para ver tus tokens</p>
+                </div>
+            `;
+        }
+        
+        if (totalPortfolio) {
+            totalPortfolio.textContent = '$0.00 USD';
+        }
     }
 
     saveConnection() {
         if (this.connectedAccount) {
             localStorage.setItem('coinbase_connected_account', JSON.stringify(this.connectedAccount));
+            console.log('💾 Conexión guardada en localStorage');
         }
     }
 
-    // ===== UI HELPERS =====
-    showLoading(message = 'Procesando...', timeoutMs = 5000) {
+    formatAddress(address) {
+        if (!address) return '';
+        return `${address.substring(0, 8)}...${address.substring(address.length - 6)}`;
+    }
+
+    // ===== LOADING MANAGEMENT =====
+    showLoading(message = '🔄 Procesando...', timeoutMs = 15000) {
         try {
-            // Limpiar el timeout anterior
+            console.log(`⏳ Mostrando loading: ${message}`);
+            
             if (this.loadingTimeout) {
                 clearTimeout(this.loadingTimeout);
+                this.loadingTimeout = null;
             }
 
-            // Cerrar cualquier modal existente primero
             this.closeAnyOpenModals();
 
             const modalElement = document.getElementById('loadingModal');
             const messageElement = document.getElementById('loadingMessage');
+            const cancelButton = document.getElementById('cancelLoadingBtn');
 
             if (!modalElement) {
-                console.warn('Modal de loading no encontrado');
-                this.showAlert(message, 'info');
+                console.warn('❌ Modal de loading no encontrado');
                 return;
             }
 
@@ -560,64 +902,53 @@ class CoinbaseWalletManager {
                 messageElement.textContent = message;
             }
 
-            // Configurar el modal correctamente antes de mostrarlo
-            modalElement.removeAttribute('aria-hidden');
-            modalElement.setAttribute('aria-modal', 'true');
-            modalElement.setAttribute('aria-labelledby', 'loadingModalLabel');
+            if (cancelButton) {
+                cancelButton.onclick = () => this.cancelOperation();
+            }
 
-            // Crear nueva instancia y mostrar
             const modal = new bootstrap.Modal(modalElement, {
                 backdrop: 'static',
                 keyboard: false,
                 focus: true
             });
 
-            // Usar eventos de Bootstrap para manejar correctamente el foco
-            modalElement.addEventListener('shown.bs.modal', () => {
-                // Enfocar un elemento seguro dentro del modal
-                const closeButton = modalElement.querySelector('.btn-close') || modalElement.querySelector('button');
-                if (closeButton) {
-                    closeButton.focus();
-                }
-            });
-
             modal.show();
-
-            // Guardar referencia al modal actual
             this.currentLoadingModal = modal;
 
-            // Timeout de seguridad
             this.loadingTimeout = setTimeout(() => {
-                console.warn('Loading timeout alcanzado, cerrando modal');
+                console.warn('⏰ Loading timeout alcanzado');
                 this.hideLoading();
                 this.showError('La operación está tomando más tiempo de lo esperado. Por favor, intenta nuevamente.');
             }, timeoutMs);
 
         } catch (error) {
-            console.error('Error mostrando loading:', error);
-            this.showAlert(message, 'info');
+            console.error('❌ Error mostrando loading:', error);
         }
     }
 
     hideLoading() {
         try {
-            // Limpiar timeout
+            console.log('👋 Ocultando loading');
+            
             if (this.loadingTimeout) {
                 clearTimeout(this.loadingTimeout);
                 this.loadingTimeout = null;
             }
 
-            /// Cerrar modal de loading correctamente
             this.closeModalSafely('loadingModal');
-
-
-            /// Limpiar referencia
             this.currentLoadingModal = null;
 
         } catch (error) {
-            console.error('Error ocultando loading:', error);
-            this.cleanupModalBackdrops(); // Limpieza de emergencia
+            console.error('❌ Error ocultando loading:', error);
+            this.cleanupModalBackdrops();
         }
+    }
+
+    cancelOperation() {
+        console.log('❌ Operación cancelada por el usuario');
+        this.isProcessing = false;
+        this.hideLoading();
+        this.showInfo('Operación cancelada por el usuario');
     }
 
     closeModalSafely(modalId) {
@@ -625,129 +956,107 @@ class CoinbaseWalletManager {
             const modalElement = document.getElementById(modalId);
             if (!modalElement) return;
 
-            // 1. Remover foco de cualquier elemento dentro del modal primero
-            const focusedElement = document.activeElement;
-            if (focusedElement && modalElement.contains(focusedElement)) {
-                focusedElement.blur();
-            }
-
-            // 2. Obtener instancia de Bootstrap modal
             const modal = bootstrap.Modal.getInstance(modalElement);
             if (modal) {
-                // Usar el método hide() de Bootstrap que maneja la accesibilidad correctamente
                 modal.hide();
             } else {
-                // Fallback: cerrar manualmente pero correctamente
                 this.closeModalManually(modalElement);
             }
         } catch (error) {
-            console.error(`Error closing modal ${modalId}:`, error);
+            console.error(`❌ Error closing modal ${modalId}:`, error);
+            this.cleanupModalBackdrops();
+        }
+    }
+
+    closeAnyOpenModals() {
+        try {
+            const openModals = document.querySelectorAll('.modal.show');
+            openModals.forEach(modal => {
+                const modalId = modal.id;
+                if (modalId) {
+                    this.closeModalSafely(modalId);
+                }
+            });
+
+            setTimeout(() => this.cleanupModalBackdrops(), 100);
+        } catch (error) {
+            console.error('❌ Error closing open modals:', error);
             this.cleanupModalBackdrops();
         }
     }
 
     closeModalManually(modalElement) {
-        // Remover clases de show
         modalElement.classList.remove('show');
         modalElement.style.display = 'none';
-
-        // Remover atributos de accesibilidad problemáticos
-        modalElement.removeAttribute('aria-hidden');
-        modalElement.setAttribute('aria-modal', 'false');
-
-        // Remover el backdrop específico de este modal
-        const modalBackdrop = document.querySelector('.modal-backdrop');
-        if (modalBackdrop) {
-            modalBackdrop.remove();
-        }
-
-        // Restaurar el body
+        modalElement.setAttribute('aria-hidden', 'true');
+        
+        const backdrop = document.querySelector('.modal-backdrop');
+        if (backdrop) backdrop.remove();
+        
         document.body.classList.remove('modal-open');
         document.body.style.overflow = '';
         document.body.style.paddingRight = '';
     }
 
     cleanupModalBackdrops() {
-        // Limpiar todos los backdrops
         const backdrops = document.querySelectorAll('.modal-backdrop');
         backdrops.forEach(backdrop => backdrop.remove());
-
-        // Restaurar estado del body
+        
         document.body.classList.remove('modal-open');
         document.body.style.overflow = '';
         document.body.style.paddingRight = '';
 
-        // Asegurar que todos los modales estén cerrados
         const modals = document.querySelectorAll('.modal');
         modals.forEach(modal => {
             modal.classList.remove('show');
             modal.style.display = 'none';
-            modal.removeAttribute('aria-hidden');
-            modal.setAttribute('aria-modal', 'false');
+            modal.setAttribute('aria-hidden', 'true');
         });
     }
 
+    // ===== NOTIFICATION SYSTEM =====
     showSuccess(message) {
+        console.log('✅ Success:', message);
         this.showAlert(message, 'success');
     }
 
     showError(message) {
+        console.error('❌ Error:', message);
         this.showAlert(message, 'danger');
     }
 
+    showInfo(message) {
+        console.log('ℹ️ Info:', message);
+        this.showAlert(message, 'info');
+    }
+
     showAlert(message, type) {
+        let alertContainer = document.getElementById('alertContainer');
+        if (!alertContainer) {
+            alertContainer = document.createElement('div');
+            alertContainer.id = 'alertContainer';
+            alertContainer.className = 'position-fixed top-0 end-0 p-3';
+            alertContainer.style.zIndex = '9999';
+            document.body.appendChild(alertContainer);
+        }
+
+        const alertId = 'alert-' + Date.now();
         const alertDiv = document.createElement('div');
+        alertDiv.id = alertId;
         alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
         alertDiv.innerHTML = `
             ${message}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         `;
 
-        // Insertar al inicio del container principal
-        const container = document.querySelector('.container');
-        if (container) {
-            container.insertBefore(alertDiv, container.firstChild);
-        }
+        alertContainer.appendChild(alertDiv);
 
-        // Auto-remover después de 5 segundos
         setTimeout(() => {
-            if (alertDiv.parentNode) {
-                alertDiv.remove();
+            const alertToRemove = document.getElementById(alertId);
+            if (alertToRemove) {
+                alertToRemove.remove();
             }
         }, 5000);
-    }
-
-    // ===== RESPONSE HANDLER =====
-    async handleApiResponse(apiCall, successMessage, loadingMessage = 'Procesando...') {
-        this.showLoading(loadingMessage);
-
-        try {
-            const response = await apiCall();
-
-            if (response && response.success) {
-                // ✅ Cerrar el modal de loading correctamente
-                this.hideLoading();
-
-                // ✅ Mostrar mensaje de éxito
-                if (successMessage) {
-                    this.showSuccess(successMessage);
-                }
-
-                return response;
-            } else {
-                throw new Error(response?.error || 'Error desconocido');
-            }
-
-        } catch (error) {
-            this.hideLoading();
-
-            // No mostrar error si es de autenticación (ya se maneja en fetchWithAuth)
-            if (!error.message.includes('Sesión expirada')) {
-                this.showError(error.message);
-            }
-
-            return null;
-        }
     }
 
     // ===== PUBLIC METHODS =====
@@ -765,10 +1074,9 @@ class CoinbaseWalletManager {
 
     // ===== TRANSACTION HISTORY =====
     async loadTransactionHistory() {
-        if (!this.connectedAccount) return;
+        if (!this.connectedAccount || this.isProcessing) return;
 
         try {
-            // Implementar lógica para cargar historial de transacciones
             const transactions = await this.fetchTransactionHistory();
             this.renderTransactionHistory(transactions);
         } catch (error) {
@@ -777,7 +1085,7 @@ class CoinbaseWalletManager {
     }
 
     async fetchTransactionHistory() {
-        // Simular datos de transacciones
+        // Simular historial de transacciones
         return [
             {
                 hash: '0x123...abc',
@@ -787,16 +1095,6 @@ class CoinbaseWalletManager {
                 from: this.connectedAccount.address,
                 to: '0x456...def',
                 timestamp: new Date(Date.now() - 3600000).toISOString(),
-                status: 'confirmed'
-            },
-            {
-                hash: '0x789...ghi',
-                type: 'receive',
-                amount: '50.0',
-                token: 'USDC',
-                from: '0xdef...123',
-                to: this.connectedAccount.address,
-                timestamp: new Date(Date.now() - 7200000).toISOString(),
                 status: 'confirmed'
             }
         ];
@@ -816,7 +1114,7 @@ class CoinbaseWalletManager {
             return;
         }
 
-        let html = transactions.map(tx => `
+        const html = transactions.map(tx => `
             <div class="transaction-item d-flex justify-content-between align-items-center p-3 border-bottom">
                 <div>
                     <div class="d-flex align-items-center">
@@ -838,119 +1136,154 @@ class CoinbaseWalletManager {
     }
 }
 
-// ===== GLOBAL INSTANCE =====
+// ===== GLOBAL INSTANCE AND INITIALIZATION =====
 let coinbaseWallet = null;
 
-// ===== INITIALIZATION =====
-document.addEventListener('DOMContentLoaded', function () {
-    // Inicializar manager de Coinbase
-    coinbaseWallet = new CoinbaseWalletManager();
+function initializeCoinbaseWallet() {
+    console.log('🚀 Inicializando Coinbase Wallet...');
+    
+    try {
+        if (typeof bootstrap === 'undefined') {
+            console.error('❌ Bootstrap no está cargado');
+            return;
+        }
 
-    // Configurar event listeners adicionales
-    setupAdditionalEventListeners();
+        coinbaseWallet = new CoinbaseWalletManager();
+        console.log('✅ Coinbase Wallet Manager inicializado correctamente');
 
-    // Cargar historial de transacciones si está conectado
-    if (coinbaseWallet.isWalletConnected()) {
-        coinbaseWallet.loadTransactionHistory();
+        // Hacer disponible globalmente
+        window.coinbaseWallet = coinbaseWallet;
+        
+        // Configurar funciones globales
+        window.connectCoinbaseWallet = function() {
+            if (coinbaseWallet) {
+                coinbaseWallet.connectWallet();
+            } else {
+                console.error('❌ Coinbase Wallet no está inicializado');
+                showGlobalAlert('Error: Coinbase Wallet no está disponible. Recarga la página.', 'danger');
+            }
+        };
+
+        window.disconnectCoinbaseWallet = function() {
+            if (coinbaseWallet) {
+                coinbaseWallet.disconnectWallet();
+            }
+        };
+
+        window.loadCoinbaseTokens = function() {
+            if (coinbaseWallet) {
+                coinbaseWallet.loadAccountBalances();
+            }
+        };
+
+        window.showCoinbaseAccountInfo = function() {
+            if (coinbaseWallet && coinbaseWallet.connectedAccount) {
+                const account = coinbaseWallet.connectedAccount;
+                const modalBody = document.getElementById('accountInfoModalBody');
+
+                if (modalBody) {
+                    modalBody.innerHTML = `
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Nombre:</strong> ${account.name || 'No especificado'}</p>
+                                <p><strong>Dirección:</strong> <code class="user-select-all">${account.address}</code></p>
+                                <p><strong>Tipo:</strong> ${account.type}</p>
+                                <p><strong>Creado:</strong> ${account.created_at ? new Date(account.created_at).toLocaleString() : 'N/A'}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Importado:</strong> ${account.imported ? 'Sí' : 'No'}</p>
+                                <p><strong>Smart Account:</strong> ${account.is_smart_account ? 'Sí' : 'No'}</p>
+                                <p><strong>Última actualización:</strong> ${new Date().toLocaleString()}</p>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <button class="btn btn-outline-primary btn-sm" onclick="copyToClipboard('${account.address}')">
+                                <i class="fas fa-copy"></i> Copiar Dirección
+                            </button>
+                        </div>
+                    `;
+                }
+
+                new bootstrap.Modal(document.getElementById('accountInfoModal')).show();
+            } else {
+                showGlobalAlert('❌ No hay una cuenta de Coinbase conectada', 'warning');
+            }
+        };
+
+        window.copyToClipboard = function(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                const button = event.target.closest('button');
+                if (button) {
+                    const originalHTML = button.innerHTML;
+                    button.innerHTML = '<i class="fas fa-check"></i> Copiado!';
+                    button.disabled = true;
+                    
+                    setTimeout(() => {
+                        button.innerHTML = originalHTML;
+                        button.disabled = false;
+                    }, 2000);
+                }
+            }).catch(err => {
+                console.error('Error copying to clipboard:', err);
+                showGlobalAlert('❌ Error al copiar al portapapeles', 'danger');
+            });
+        };
+
+        console.log('✅ Todas las funciones globales configuradas');
+
+    } catch (error) {
+        console.error('❌ Error inicializando Coinbase Wallet:', error);
+    }
+}
+
+// Función global para mostrar alertas
+function showGlobalAlert(message, type) {
+    let alertContainer = document.getElementById('alertContainer');
+    if (!alertContainer) {
+        alertContainer = document.createElement('div');
+        alertContainer.id = 'alertContainer';
+        alertContainer.className = 'position-fixed top-0 end-0 p-3';
+        alertContainer.style.zIndex = '9999';
+        document.body.appendChild(alertContainer);
+    }
+
+    const alertId = 'alert-' + Date.now();
+    const alertDiv = document.createElement('div');
+    alertDiv.id = alertId;
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    alertContainer.appendChild(alertDiv);
+
+    setTimeout(() => {
+        const alertToRemove = document.getElementById(alertId);
+        if (alertToRemove) {
+            alertToRemove.remove();
+        }
+    }, 5000);
+}
+
+// ===== INITIALIZATION WHEN DOM IS READY =====
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('📄 DOM completamente cargado, inicializando Coinbase Wallet...');
+    
+    // Esperar a que Bootstrap esté disponible
+    if (typeof bootstrap !== 'undefined') {
+        initializeCoinbaseWallet();
+    } else {
+        // Si Bootstrap no está disponible, esperar y reintentar
+        console.log('⏳ Esperando a que Bootstrap se cargue...');
+        const waitForBootstrap = setInterval(() => {
+            if (typeof bootstrap !== 'undefined') {
+                clearInterval(waitForBootstrap);
+                initializeCoinbaseWallet();
+            }
+        }, 100);
     }
 });
 
-function setupAdditionalEventListeners() {
-    // Auto-completar cuenta conectada en formularios
-    document.getElementById('accountNameInput')?.addEventListener('input', function () {
-        const fromAccount = document.getElementById('fromAccount');
-        if (fromAccount) {
-            fromAccount.value = this.value;
-        }
-    });
-
-    // Actualizar símbolo del token en transferencia
-    document.getElementById('transferToken')?.addEventListener('change', function () {
-        const symbolDisplay = document.getElementById('tokenSymbolDisplay');
-        if (symbolDisplay) {
-            symbolDisplay.textContent = this.value;
-        }
-    });
-
-    // Quick actions
-    document.getElementById('refreshAllBtn')?.addEventListener('click', function () {
-        if (coinbaseWallet) {
-            coinbaseWallet.loadAccountBalances();
-            coinbaseWallet.loadTransactionHistory();
-        }
-    });
-
-    document.getElementById('viewTokensBtn')?.addEventListener('click', function () {
-        if (coinbaseWallet) {
-            coinbaseWallet.loadAccountBalances();
-        }
-    });
-}
-
-// ===== GLOBAL FUNCTIONS FOR HTML =====
-function connectCoinbaseWallet() {
-    if (coinbaseWallet) {
-        coinbaseWallet.connectWallet();
-    }
-}
-
-function disconnectCoinbaseWallet() {
-    if (coinbaseWallet) {
-        coinbaseWallet.disconnectWallet();
-    }
-}
-
-function loadCoinbaseTokens() {
-    if (coinbaseWallet) {
-        coinbaseWallet.loadAccountBalances();
-    }
-}
-
-function showCoinbaseAccountInfo() {
-    if (coinbaseWallet && coinbaseWallet.connectedAccount) {
-        const account = coinbaseWallet.connectedAccount;
-        const modalBody = document.getElementById('accountInfoModalBody');
-
-        if (modalBody) {
-            modalBody.innerHTML = `
-                <div class="row">
-                    <div class="col-md-6">
-                        <p><strong>Nombre:</strong> ${account.name || 'No especificado'}</p>
-                        <p><strong>Dirección:</strong> <code>${account.address}</code></p>
-                        <p><strong>Tipo:</strong> ${account.type}</p>
-                    </div>
-                    <div class="col-md-6">
-                        <p><strong>Creado:</strong> ${account.created_at ? new Date(account.created_at).toLocaleString() : 'N/A'}</p>
-                        <p><strong>Importado:</strong> ${account.imported ? 'Sí' : 'No'}</p>
-                        <p><strong>Smart Account:</strong> ${account.is_smart_account ? 'Sí' : 'No'}</p>
-                    </div>
-                </div>
-                <div class="mt-3">
-                    <button class="btn btn-outline-primary btn-sm" onclick="copyToClipboard('${account.address}')">
-                        <i class="fas fa-copy"></i> Copiar Dirección
-                    </button>
-                </div>
-            `;
-        }
-
-        new bootstrap.Modal(document.getElementById('accountInfoModal')).show();
-    }
-}
-
-function copyToClipboard(text) {
-    navigator.clipboard.writeText(text).then(() => {
-        const originalText = event.target.innerHTML;
-        event.target.innerHTML = '<i class="fas fa-check"></i> Copiado!';
-
-        setTimeout(() => {
-            event.target.innerHTML = originalText;
-        }, 2000);
-    });
-}
-
 // Exportar para uso global
-window.coinbaseWallet = coinbaseWallet;
-window.connectCoinbaseWallet = connectCoinbaseWallet;
-window.disconnectCoinbaseWallet = disconnectCoinbaseWallet;
-window.loadCoinbaseTokens = loadCoinbaseTokens;
-window.showCoinbaseAccountInfo = showCoinbaseAccountInfo;
+window.initializeCoinbaseWallet = initializeCoinbaseWallet;

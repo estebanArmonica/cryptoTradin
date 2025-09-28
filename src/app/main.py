@@ -27,7 +27,7 @@ from app.apis.api_coinbase import router as coinbase_router
 from app.services.coinbase_service import coinbase_service
 
 # AGREGAR estas importaciones al inicio de main.py:
-from .dependencies import (
+from app.dependencies import (
     get_current_user, 
     get_current_user_with_details,
     rate_limit,
@@ -1978,17 +1978,31 @@ async def startup_event():
         await proton_service.initialize()
         print("✅ Proton Wallet service initialized successfully")
 
-        # Inicializar servicio de Coinbase Wallet
-        await coinbase_service.initialize()
-        print("✅ Coinbase Wallet service initialized successfully")
+        # Inicializar servicio de Coinbase Wallet con manejo robusto
+        try:
+            coinbase_init_result = await coinbase_service.initialize()
+            if coinbase_init_result:
+                print("✅ Coinbase Wallet service initialized successfully")
+                
+                # Probar conexión
+                connection_test = await coinbase_service.test_connection()
+                if connection_test["success"]:
+                    print(f"✅ Coinbase CDP connection test: {connection_test['message']}")
+                else:
+                    print(f"⚠️ Coinbase CDP connection warning: {connection_test.get('error', 'Unknown error')}")
+            else:
+                print("❌ Coinbase Wallet service initialization failed")
+        except Exception as e:
+            print(f"⚠️ Coinbase Wallet service initialization error: {e}")
         
         print("✅ Dashboard endpoints registered")
         print("✅ API version 2.0.0 is ready")
         print("✅ Simulación disponible en: /simulacion")
         print("✅ Payment processing available via Braintree and PayPal")
         print("✅ Proton Wallet integration ready")
+        print("✅ Coinbase Wallet integration ready")
     except Exception as e:
-        print(f"⚠️  Error initializing services: {e}")
+        print(f"⚠️ Error initializing services: {e}")
 
 @app.get("/api", tags=["Info"])
 async def api_info():
@@ -2019,6 +2033,38 @@ async def api_info():
                 "transfer": "/api/proton/transfer",
                 "tokens": "/api/proton/tokens/{account_name}"
             },
+            "coinbase_wallet": {
+                "test_connection": "/api/coinbase/test-connection",
+                "health": "/api/coinbase/health",
+                "evm_accounts": {
+                    "create": "/api/coinbase/evm/create",
+                    "import": "/api/coinbase/evm/import",
+                    "list": "/api/coinbase/evm/accounts",
+                    "get": "/api/coinbase/evm/account",
+                    "update": "/api/coinbase/evm/account/{address}",
+                    "export": "/api/coinbase/evm/export",
+                    "get_or_create": "/api/coinbase/evm/get-or-create"
+                },
+                "solana_accounts": {
+                    "create": "/api/coinbase/solana/create",
+                    "import": "/api/coinbase/solana/import",
+                    "list": "/api/coinbase/solana/accounts",
+                    "get": "/api/coinbase/solana/account",
+                    "update": "/api/coinbase/solana/account/{address}",
+                    "export": "/api/coinbase/solana/export",
+                    "get_or_create": "/api/coinbase/solana/get-or-create"
+                },
+                "smart_accounts": {
+                    "create": "/api/coinbase/smart-account/create",
+                    "get": "/api/coinbase/smart-account/{owner_address}"
+                },
+                "transactions": {
+                    "evm_send": "/api/coinbase/evm/send-transaction",
+                    "evm_faucet": "/api/coinbase/evm/request-faucet",
+                    "solana_send": "/api/coinbase/solana/send-transaction",
+                    "solana_faucet": "/api/coinbase/solana/request-faucet"
+                }
+            },
             "payments": {
                 "client_token": "/api/braintree/client-token",
                 "process_payment": "/api/braintree/process-payment",
@@ -2026,6 +2072,56 @@ async def api_info():
                 "paypal_payment": "/api/paypal/process-payment",
                 "paypal_buy_crypto": "/api/paypal/buy-crypto"
             }
+        },
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+# 4. Agregar un endpoint de health check específico para Coinbase
+@app.get("/api/coinbase/health", tags=["Coinbase Wallet"])
+async def coinbase_health_check(user_id: int = Depends(get_current_user)):
+    """Health check específico para el servicio Coinbase"""
+    try:
+        # Verificar inicialización
+        if not coinbase_service._initialized:
+            await coinbase_service.initialize()
+        
+        # Probar conexión
+        connection_test = await coinbase_service.test_connection()
+        
+        return {
+            "service": "coinbase_wallet",
+            "status": "operational" if connection_test["success"] else "degraded",
+            "initialized": coinbase_service._initialized,
+            "connection_test": connection_test,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "service": "coinbase_wallet",
+            "status": "unavailable",
+            "initialized": coinbase_service._initialized,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+# 5. Agregar un endpoint para verificar configuración de Coinbase (solo desarrollo)
+@app.get("/api/debug/coinbase-config", include_in_schema=False)
+async def debug_coinbase_config(user_id: int = Depends(get_current_user)):
+    """Endpoint de debug para verificar configuración de Coinbase (solo desarrollo)"""
+    import os
+    return {
+        "coinbase_config": {
+            "api_key_id_set": bool(os.getenv("COINBASE_API_KEY_ID")),
+            "api_key_secret_set": bool(os.getenv("COINBASE_SECRET_KEY")),
+            "wallet_secret_set": bool(os.getenv("COINBASE_WALLET_SECRET")),
+            "client_api_key_set": bool(os.getenv("COINBASE_CLIENT_API_KEY")),
+            "initialized": coinbase_service._initialized
+        },
+        "environment": {
+            "COINBASE_API_KEY_ID_length": len(os.getenv("COINBASE_API_KEY_ID", "")) if os.getenv("COINBASE_API_KEY_ID") else 0,
+            "COINBASE_SECRET_KEY_length": len(os.getenv("COINBASE_SECRET_KEY", "")) if os.getenv("COINBASE_SECRET_KEY") else 0,
+            "COINBASE_WALLET_SECRET_length": len(os.getenv("COINBASE_WALLET_SECRET", "")) if os.getenv("COINBASE_WALLET_SECRET") else 0
         },
         "timestamp": datetime.now().isoformat()
     }

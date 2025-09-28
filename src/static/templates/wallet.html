@@ -270,6 +270,47 @@
             justify-content: center;
             font-size: 24px;
         }
+
+        .chain-section {
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .chain-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .token-card .token-icon {
+            width: 40px;
+            height: 40px;
+            font-size: 18px;
+        }
+
+        .loading-spinner {
+            width: 3rem;
+            height: 3rem;
+        }
+
+        .account-name-input {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            border-radius: 8px;
+        }
+
+        .account-name-input::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .account-name-input:focus {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.5);
+            color: white;
+            box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.25);
+        }
     </style>
 </head>
 
@@ -318,28 +359,34 @@
                                 </div>
                             </div>
 
+                            <!-- ✅ CORREGIDO: Agregado input para nombre de cuenta -->
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <input type="text" class="form-control account-name-input" 
+                                           id="accountNameInput" 
+                                           placeholder="Nombre opcional para la cuenta">
+                                    <div class="form-text text-white-50">Deja vacío para nombre automático</div>
+                                </div>
+                            </div>
+
                             <div class="row g-3">
                                 <div class="col-md-6">
                                     <div class="d-grid gap-2">
-                                        <button id="connectCoinbaseBtn" class="btn btn-coinbase"
-                                            onclick="connectCoinbaseWallet()">
+                                        <button id="connectCoinbaseBtn" class="btn btn-coinbase">
                                             <i class="fas fa-plug"></i> Conectar Coinbase
                                         </button>
-                                        <button id="disconnectCoinbaseBtn" class="btn btn-outline-light"
-                                            onclick="disconnectCoinbaseWallet()" style="display: none;">
+                                        <button id="disconnectCoinbaseBtn" class="btn btn-outline-light" style="display: none;">
                                             <i class="fas fa-power-off"></i> Desconectar
                                         </button>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="d-grid gap-2">
-                                        <button class="btn btn-outline-light"
-                                            onclick="coinbaseWallet.createEVMAccount()">
-                                            <i class="fas fa-plus"></i> Nueva Cuenta EVM
+                                        <button id="createEVMAccountBtn" class="btn btn-outline-light">
+                                            <i class="fab fa-ethereum"></i> Nueva Cuenta EVM
                                         </button>
-                                        <button class="btn btn-outline-light"
-                                            onclick="coinbaseWallet.createSolanaAccount()">
-                                            <i class="fas fa-plus"></i> Nueva Cuenta Solana
+                                        <button id="createSolanaAccountBtn" class="btn btn-outline-light">
+                                            <i class="fas fa-sun"></i> Nueva Cuenta Solana
                                         </button>
                                     </div>
                                 </div>
@@ -361,13 +408,12 @@
             <div class="col-12">
                 <div class="balance-card fade-in">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="section-title"><i class="fas fa-user-circle me-2"></i>Información de Cuenta Coinbase
-                        </h5>
+                        <h5 class="section-title"><i class="fas fa-user-circle me-2"></i>Información de Cuenta Coinbase</h5>
                         <div>
                             <button class="btn btn-sm btn-outline-info me-2" onclick="showCoinbaseAccountInfo()">
                                 <i class="fas fa-info-circle"></i> Detalles
                             </button>
-                            <button class="btn btn-sm btn-outline-danger" onclick="disconnectCoinbaseWallet()">
+                            <button id="disconnectCoinbaseBtn2" class="btn btn-sm btn-outline-danger">
                                 <i class="fas fa-power-off"></i> Desconectar
                             </button>
                         </div>
@@ -406,10 +452,10 @@
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h5 class="section-title"><i class="fas fa-coins me-2"></i>Mis Tokens</h5>
                         <div>
-                            <button class="btn btn-sm btn-outline-primary me-2" onclick="loadCoinbaseTokens()">
+                            <button id="refreshBalancesBtn" class="btn btn-sm btn-outline-primary me-2">
                                 <i class="fas fa-sync-alt"></i> Actualizar
                             </button>
-                            <button class="btn btn-sm btn-outline-secondary" onclick="coinbaseWallet.importAccount()">
+                            <button id="importAccountBtn" class="btn btn-sm btn-outline-secondary">
                                 <i class="fas fa-download"></i> Importar Cuenta
                             </button>
                         </div>
@@ -419,7 +465,7 @@
                             <i class="fas fa-coins fa-4x text-muted mb-3"></i>
                             <h5 class="text-muted">Conecta tu wallet de Coinbase</h5>
                             <p class="text-muted">Para ver tus tokens y balances</p>
-                            <button class="btn btn-primary mt-2" onclick="connectCoinbaseWallet()">
+                            <button id="connectCoinbaseBtn2" class="btn btn-primary mt-2">
                                 <i class="fas fa-plug"></i> Conectar Wallet
                             </button>
                         </div>
@@ -466,35 +512,37 @@
 
                         <div class="mb-3">
                             <label class="form-label">Blockchain *</label>
-                            <select class="form-select" id="transferChain" required>
+                            <select class="form-select" name="chain" required>
                                 <option value="">Seleccionar blockchain...</option>
                                 <option value="EVM" selected>Ethereum (EVM)</option>
                                 <option value="Solana">Solana</option>
-                                <option value="Polygon">Polygon</option>
-                                <option value="Arbitrum">Arbitrum</option>
                             </select>
                         </div>
 
                         <div class="mb-3">
                             <label class="form-label">Token *</label>
-                            <select class="form-select" id="transferToken" required>
+                            <select class="form-select" name="token" required>
                                 <option value="">Seleccionar token...</option>
                                 <option value="ETH" selected>ETH (Ethereum)</option>
                                 <option value="SOL">SOL (Solana)</option>
                                 <option value="USDC">USDC (USD Coin)</option>
                                 <option value="USDT">USDT (Tether)</option>
-                                <option value="BTC">BTC (Bitcoin)</option>
                             </select>
                         </div>
 
                         <div class="mb-3">
                             <label class="form-label">Cantidad *</label>
                             <div class="input-group">
-                                <input type="number" class="form-control" id="transferAmount" step="0.0001" min="0.0001"
+                                <input type="number" class="form-control" name="amount" step="0.0001" min="0.0001"
                                     placeholder="0.0000" required>
                                 <span class="input-group-text" id="tokenSymbolDisplay">ETH</span>
                             </div>
                             <div class="form-text">Formato: 1.5000 ETH</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Memo (opcional)</label>
+                            <input type="text" class="form-control" name="memo" placeholder="Mensaje opcional">
                         </div>
 
                         <button type="submit" class="btn btn-primary w-100">
@@ -507,11 +555,11 @@
                 <div class="balance-card mt-3 fade-in">
                     <h6 class="section-title"><i class="fas fa-bolt me-2"></i>Acciones Rápidas</h6>
                     <div class="d-grid gap-2">
-                        <button class="btn btn-outline-success" onclick="coinbaseWallet.loadAccountBalances()">
+                        <button id="refreshBalancesBtn2" class="btn btn-outline-success">
                             <i class="fas fa-sync"></i> Actualizar Balances
                         </button>
-                        <button class="btn btn-outline-info" onclick="coinbaseWallet.loadTransactionHistory()">
-                            <i class="fas fa-history"></i> Ver Historial
+                        <button id="refreshAllBtn" class="btn btn-outline-info">
+                            <i class="fas fa-history"></i> Actualizar Todo
                         </button>
                         <button class="btn btn-outline-warning" onclick="showCoinbaseAccountInfo()">
                             <i class="fas fa-info-circle"></i> Info de Cuenta
@@ -540,15 +588,14 @@
                     <h5 class="modal-title" id="loadingModalLabel">Procesando</h5>
                 </div>
                 <div class="modal-body text-center">
-                    <div class="spinner-border text-primary mb-3" role="status">
+                    <div class="spinner-border text-primary loading-spinner mb-3" role="status">
                         <span class="visually-hidden">Cargando...</span>
                     </div>
                     <p id="loadingMessage">Procesando...</p>
                 </div>
-                <div class="modal-footer border-0">
-                    <!-- Botón de cerrar accesible pero deshabilitado -->
-                    <button type="button" class="btn btn-outline-secondary btn-sm" disabled>
-                        <i class="fas fa-times me-1"></i> Cancelar
+                <div class="modal-footer border-0 justify-content-center">
+                    <button type="button" class="btn btn-outline-danger cancel-loading" id="cancelLoadingBtn">
+                        <i class="fas fa-times me-1"></i> Cancelar Operación
                     </button>
                 </div>
             </div>
@@ -587,66 +634,266 @@
     <script>
         // Inicialización cuando el DOM está listo
         document.addEventListener('DOMContentLoaded', function () {
-            // Actualizar símbolo del token cuando se cambia
-            document.getElementById('transferToken').addEventListener('change', function () {
-                document.getElementById('tokenSymbolDisplay').textContent = this.value;
-            });
+            console.log('✅ Inicializando página Wallet...');
 
-            // Verificar si hay una conexión guardada
-            if (localStorage.getItem('coinbase_connected_account')) {
-                setTimeout(() => {
-                    if (coinbaseWallet) {
-                        coinbaseWallet.updateConnectionStatus(true);
-                        coinbaseWallet.loadAccountBalances();
-                    }
-                }, 1000);
-            }
+            // Esperar a que los scripts se carguen completamente
+            setTimeout(() => {
+                // ✅ CORREGIDO: Configurar event listeners para todos los botones
+                setupEventListeners();
 
-            // Añadir animaciones a los elementos al hacer scroll
-            const observerOptions = {
-                threshold: 0.1,
-                rootMargin: '0px 0px -50px 0px'
-            };
+                // Actualizar símbolo del token cuando se cambia
+                const tokenSelect = document.querySelector('select[name="token"]');
+                if (tokenSelect) {
+                    tokenSelect.addEventListener('change', function () {
+                        const symbolDisplay = document.getElementById('tokenSymbolDisplay');
+                        if (symbolDisplay) {
+                            symbolDisplay.textContent = this.value;
+                        }
+                    });
+                }
 
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        entry.target.classList.add('fade-in');
-                    }
+                // Verificar si hay una conexión guardada
+                if (localStorage.getItem('coinbase_connected_account')) {
+                    console.log('🔄 Cuenta Coinbase guardada encontrada, reconectando...');
+                    setTimeout(() => {
+                        if (window.coinbaseWallet) {
+                            window.coinbaseWallet.updateConnectionStatus(true);
+                            window.coinbaseWallet.loadAccountBalances();
+                            window.coinbaseWallet.loadTransactionHistory();
+                        } else {
+                            console.log('⏳ CoinbaseWallet no está listo, reintentando en 2 segundos...');
+                            setTimeout(() => {
+                                if (window.coinbaseWallet) {
+                                    window.coinbaseWallet.updateConnectionStatus(true);
+                                    window.coinbaseWallet.loadAccountBalances();
+                                }
+                            }, 2000);
+                        }
+                    }, 1500);
+                }
+
+                // Añadir animaciones a los elementos al hacer scroll
+                const observerOptions = {
+                    threshold: 0.1,
+                    rootMargin: '0px 0px -50px 0px'
+                };
+
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            entry.target.classList.add('fade-in');
+                        }
+                    });
+                }, observerOptions);
+
+                // Observar elementos para animación
+                document.querySelectorAll('.balance-card, .wallet-card').forEach(el => {
+                    observer.observe(el);
                 });
-            }, observerOptions);
 
-            // Observar elementos para animación
-            document.querySelectorAll('.balance-card, .wallet-card').forEach(el => {
-                observer.observe(el);
-            });
+                console.log('✅ Página Wallet completamente inicializada');
+            }, 100);
         });
 
-        // Función global para conectar wallet
+        // ✅ CORREGIDO: Función para configurar todos los event listeners
+        function setupEventListeners() {
+            console.log('🔧 Configurando event listeners...');
+            
+            // Botones de conexión/desconexión
+            const connectButtons = [
+                'connectCoinbaseBtn', 
+                'connectCoinbaseBtn2'
+            ];
+            
+            connectButtons.forEach(btnId => {
+                const btn = document.getElementById(btnId);
+                if (btn) {
+                    btn.addEventListener('click', connectCoinbaseWallet);
+                    console.log(`✅ Listener agregado para ${btnId}`);
+                } else {
+                    console.warn(`⚠️ Botón ${btnId} no encontrado`);
+                }
+            });
+
+            const disconnectButtons = [
+                'disconnectCoinbaseBtn',
+                'disconnectCoinbaseBtn2'
+            ];
+            
+            disconnectButtons.forEach(btnId => {
+                const btn = document.getElementById(btnId);
+                if (btn) {
+                    btn.addEventListener('click', disconnectCoinbaseWallet);
+                    console.log(`✅ Listener agregado para ${btnId}`);
+                }
+            });
+
+            // Botones de creación de cuentas
+            const evmBtn = document.getElementById('createEVMAccountBtn');
+            if (evmBtn) {
+                evmBtn.addEventListener('click', function() {
+                    console.log('🖱️ Crear cuenta EVM clickeado');
+                    if (window.coinbaseWallet) {
+                        window.coinbaseWallet.createEVMAccount();
+                    } else {
+                        showAlert('❌ Coinbase Wallet no está disponible', 'danger');
+                    }
+                });
+            }
+
+            const solanaBtn = document.getElementById('createSolanaAccountBtn');
+            if (solanaBtn) {
+                solanaBtn.addEventListener('click', function() {
+                    console.log('🖱️ Crear cuenta Solana clickeado');
+                    if (window.coinbaseWallet) {
+                        window.coinbaseWallet.createSolanaAccount();
+                    } else {
+                        showAlert('❌ Coinbase Wallet no está disponible', 'danger');
+                    }
+                });
+            }
+
+            // Botones de importación
+            const importBtn = document.getElementById('importAccountBtn');
+            if (importBtn) {
+                importBtn.addEventListener('click', function() {
+                    console.log('🖱️ Importar cuenta clickeado');
+                    if (window.coinbaseWallet) {
+                        window.coinbaseWallet.importAccount();
+                    } else {
+                        showAlert('❌ Coinbase Wallet no está disponible', 'danger');
+                    }
+                });
+            }
+
+            // Botones de actualización
+            const refreshButtons = [
+                'refreshBalancesBtn',
+                'refreshBalancesBtn2',
+                'refreshAllBtn'
+            ];
+            
+            refreshButtons.forEach(btnId => {
+                const btn = document.getElementById(btnId);
+                if (btn) {
+                    btn.addEventListener('click', function() {
+                        console.log(`🖱️ ${btnId} clickeado`);
+                        if (window.coinbaseWallet) {
+                            if (btnId === 'refreshAllBtn') {
+                                window.coinbaseWallet.loadAccountBalances();
+                                window.coinbaseWallet.loadTransactionHistory();
+                            } else {
+                                window.coinbaseWallet.loadAccountBalances();
+                            }
+                        } else {
+                            showAlert('❌ Coinbase Wallet no está disponible', 'danger');
+                        }
+                    });
+                }
+            });
+
+            // Formulario de transferencia
+            const transferForm = document.getElementById('transferForm');
+            if (transferForm) {
+                transferForm.addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    console.log('📤 Formulario de transferencia enviado');
+                    if (window.coinbaseWallet) {
+                        window.coinbaseWallet.handleTransfer();
+                    } else {
+                        showAlert('❌ Coinbase Wallet no está disponible', 'danger');
+                    }
+                });
+            }
+
+            // Auto-completar cuenta conectada en formularios
+            const accountNameInput = document.getElementById('accountNameInput');
+            if (accountNameInput) {
+                accountNameInput.addEventListener('input', function() {
+                    const fromAccount = document.getElementById('fromAccount');
+                    if (fromAccount && this.value) {
+                        fromAccount.value = this.value;
+                    }
+                });
+            }
+
+            // Manejar cambio de token para actualizar símbolo
+            const tokenSelect = document.querySelector('select[name="token"]');
+            if (tokenSelect) {
+                tokenSelect.addEventListener('change', function() {
+                    const symbolDisplay = document.getElementById('tokenSymbolDisplay');
+                    if (symbolDisplay) {
+                        symbolDisplay.textContent = this.value;
+                        console.log(`🔄 Símbolo de token cambiado a: ${this.value}`);
+                    }
+                });
+            }
+
+            console.log('✅ Todos los event listeners configurados correctamente');
+        }
+
+        // ✅ CORREGIDO: Función global para conectar wallet
         function connectCoinbaseWallet() {
-            if (coinbaseWallet) {
-                coinbaseWallet.connectWallet();
+            console.log('🌐 Función connectCoinbaseWallet llamada');
+            
+            if (window.coinbaseWallet) {
+                console.log('✅ CoinbaseWallet disponible, iniciando conexión...');
+                window.coinbaseWallet.connectWallet();
+            } else {
+                console.error('❌ Coinbase Wallet no está inicializado');
+                
+                // Intentar inicializar si existe la función
+                if (window.initializeCoinbaseWallet) {
+                    console.log('🔄 Intentando inicializar CoinbaseWallet...');
+                    window.initializeCoinbaseWallet();
+                    
+                    // Reintentar después de un breve tiempo
+                    setTimeout(() => {
+                        if (window.coinbaseWallet) {
+                            console.log('✅ CoinbaseWallet inicializado, conectando...');
+                            window.coinbaseWallet.connectWallet();
+                        } else {
+                            console.error('❌ No se pudo inicializar CoinbaseWallet');
+                            showAlert('❌ Error: No se pudo inicializar Coinbase Wallet. Recarga la página.', 'danger');
+                        }
+                    }, 1000);
+                } else {
+                    console.error('❌ initializeCoinbaseWallet no está disponible');
+                    showAlert('❌ Error: Coinbase Wallet no está disponible. Recarga la página.', 'danger');
+                }
             }
         }
 
-        // Función global para desconectar wallet
+        // ✅ CORREGIDO: Función global para desconectar wallet
         function disconnectCoinbaseWallet() {
-            if (coinbaseWallet) {
-                coinbaseWallet.disconnectWallet();
+            console.log('🔌 Función disconnectCoinbaseWallet llamada');
+            
+            if (window.coinbaseWallet) {
+                window.coinbaseWallet.disconnectWallet();
+            } else {
+                console.error('❌ Coinbase Wallet no está inicializado');
+                showAlert('❌ Coinbase Wallet no está disponible', 'danger');
             }
         }
 
-        // Función global para cargar tokens
+        // ✅ CORREGIDO: Función global para cargar tokens
         function loadCoinbaseTokens() {
-            if (coinbaseWallet) {
-                coinbaseWallet.loadAccountBalances();
+            console.log('💰 Función loadCoinbaseTokens llamada');
+            
+            if (window.coinbaseWallet) {
+                window.coinbaseWallet.loadAccountBalances();
+            } else {
+                console.error('❌ Coinbase Wallet no está inicializado');
+                showAlert('❌ Coinbase Wallet no está disponible', 'danger');
             }
         }
 
-        // Función global para mostrar información de cuenta
+        // ✅ CORREGIDO: Función global para mostrar información de cuenta
         function showCoinbaseAccountInfo() {
-            if (coinbaseWallet && coinbaseWallet.connectedAccount) {
-                const account = coinbaseWallet.connectedAccount;
+            console.log('📋 Función showCoinbaseAccountInfo llamada');
+            
+            if (window.coinbaseWallet && window.coinbaseWallet.connectedAccount) {
+                const account = window.coinbaseWallet.connectedAccount;
                 const modalBody = document.getElementById('accountInfoModalBody');
 
                 if (modalBody) {
@@ -654,7 +901,7 @@
                         <div class="row">
                             <div class="col-md-6">
                                 <p><strong>Nombre:</strong> ${account.name || 'No especificado'}</p>
-                                <p><strong>Dirección:</strong> <code>${account.address}</code></p>
+                                <p><strong>Dirección:</strong> <code class="user-select-all">${account.address}</code></p>
                                 <p><strong>Tipo:</strong> ${account.type}</p>
                                 <p><strong>Creado:</strong> ${account.created_at ? new Date(account.created_at).toLocaleString() : 'N/A'}</p>
                             </div>
@@ -672,29 +919,99 @@
                     `;
                 }
 
-                new bootstrap.Modal(document.getElementById('accountInfoModal')).show();
+                // Asegurarse de que Bootstrap esté disponible
+                if (typeof bootstrap !== 'undefined') {
+                    const modalElement = document.getElementById('accountInfoModal');
+                    if (modalElement) {
+                        const modal = new bootstrap.Modal(modalElement);
+                        modal.show();
+                    }
+                } else {
+                    console.error('❌ Bootstrap no está disponible');
+                    showAlert('❌ Error: Bootstrap no está cargado correctamente', 'danger');
+                }
+            } else {
+                console.warn('⚠️ No hay cuenta de Coinbase conectada');
+                showAlert('❌ No hay una cuenta de Coinbase conectada', 'warning');
             }
         }
 
-        // Función para copiar al portapapeles
+        // ✅ CORREGIDO: Función para copiar al portapapeles
         function copyToClipboard(text) {
+            console.log('📋 Copiando al portapapeles:', text);
+            
             navigator.clipboard.writeText(text).then(() => {
-                const originalText = event.target.innerHTML;
-                event.target.innerHTML = '<i class="fas fa-check"></i> Copiado!';
-
-                setTimeout(() => {
-                    event.target.innerHTML = originalText;
-                }, 2000);
+                console.log('✅ Texto copiado al portapapeles');
+                const button = event.target.closest('button');
+                if (button) {
+                    const originalHTML = button.innerHTML;
+                    button.innerHTML = '<i class="fas fa-check"></i> Copiado!';
+                    button.disabled = true;
+                    
+                    setTimeout(() => {
+                        button.innerHTML = originalHTML;
+                        button.disabled = false;
+                        console.log('✅ Botón restaurado');
+                    }, 2000);
+                }
+            }).catch(err => {
+                console.error('❌ Error copying to clipboard:', err);
+                showAlert('❌ Error al copiar al portapapeles', 'danger');
             });
         }
 
-        // Manejar envío del formulario de transferencia
-        document.getElementById('transferForm').addEventListener('submit', function (e) {
-            e.preventDefault();
-            if (coinbaseWallet) {
-                coinbaseWallet.handleTransfer();
+        // ✅ CORREGIDO: Función auxiliar para mostrar alertas
+        function showAlert(message, type) {
+            console.log(`💬 Mostrando alerta [${type}]:`, message);
+            
+            let alertContainer = document.getElementById('alertContainer');
+            if (!alertContainer) {
+                alertContainer = document.createElement('div');
+                alertContainer.id = 'alertContainer';
+                alertContainer.className = 'position-fixed top-0 end-0 p-3';
+                alertContainer.style.zIndex = '9999';
+                document.body.appendChild(alertContainer);
+                console.log('✅ Contenedor de alertas creado');
             }
-        });
+
+            const alertId = 'alert-' + Date.now();
+            const alertDiv = document.createElement('div');
+            alertDiv.id = alertId;
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+
+            alertContainer.appendChild(alertDiv);
+            console.log(`✅ Alerta ${alertId} mostrada`);
+
+            // Auto-remover después de 5 segundos
+            setTimeout(() => {
+                const alertToRemove = document.getElementById(alertId);
+                if (alertToRemove) {
+                    alertToRemove.remove();
+                    console.log(`✅ Alerta ${alertId} removida`);
+                }
+            }, 5000);
+        }
+
+        // ✅ CORREGIDO: Función global para el botón flotante
+        function connectCoinbaseWalletFloating() {
+            console.log('🔄 Botón flotante clickeado');
+            connectCoinbaseWallet();
+        }
+
+        // Hacer funciones globalmente disponibles
+        window.connectCoinbaseWallet = connectCoinbaseWallet;
+        window.disconnectCoinbaseWallet = disconnectCoinbaseWallet;
+        window.loadCoinbaseTokens = loadCoinbaseTokens;
+        window.showCoinbaseAccountInfo = showCoinbaseAccountInfo;
+        window.copyToClipboard = copyToClipboard;
+        window.showAlert = showAlert;
+        window.connectCoinbaseWalletFloating = connectCoinbaseWalletFloating;
+
+        console.log('✅ Todas las funciones globales configuradas');
     </script>
 </body>
 
