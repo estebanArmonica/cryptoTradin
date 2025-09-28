@@ -19,6 +19,7 @@ Lo primero que tienes que hacer para poder ejecutar el proyecto es clonar el rep
 
 ```bash
 git clone https://github.com/estebanArmonica/cryptoTradin.git
+cd cryptoTradin
 cd src
 ```
 
