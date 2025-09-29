@@ -10,25 +10,43 @@ class CryptoDashboard {
         this.futureEmaData = [];
         this.autoRefreshInterval = null;
         this.autoRefreshEnabled = true;
-        this.autoRefreshTime = 90000; // 1 minuto y medio
+        this.autoRefreshTime = 90000;
+
+        // CACHÉ para almacenar datos ya cargados
+        this.dataCache = new Map();
+        this.chartCache = new Map();
+
+        // Estados de carga
+        this.isLoading = false;
+
         this.init();
     }
 
+    debugDataFlow() {
+        console.log('🔧 Debug activado');
+
+        // Verificar elementos del DOM
+        const elements = ['quickStats', 'tradingSignals', 'candleChart'];
+        elements.forEach(id => {
+            const el = document.getElementById(id);
+            console.log(`Elemento ${id}:`, el ? '✅ Encontrado' : '❌ No encontrado');
+        });
+    }
+
     async init() {
-        console.log("🚀 Inicializando dashboard con datos reales...");
+        console.log("🚀 Inicializando dashboard optimizado...");
         this.updateLastUpdatedTime();
-        await this.loadGlobalMetrics();
-        await this.loadOpportunities();
+
+        // Cargar datos iniciales en paralelo
+        await Promise.allSettled([
+            this.loadGlobalMetrics(),
+            this.loadOpportunities()
+        ]);
+
         this.setupEventListeners();
-        await this.loadCoinData(this.currentCoin, 30);
-
-        // Iniciar actualización automática
+        await this.loadCoinDataOptimized(this.currentCoin, 30);
         this.startAutoRefresh();
-
-        // Detectar cuando la pestaña está inactiva para optimizar recursos
         this.handleVisibilityChange();
-
-        // Cargar configuración de notificaciones
         this.loadNotificationSettings();
     }
 
@@ -38,7 +56,7 @@ class CryptoDashboard {
         if (coinSelector) {
             coinSelector.addEventListener('change', (e) => {
                 this.currentCoin = e.target.value;
-                this.loadCoinData(this.currentCoin, 30);
+                this.loadCoinDataOptimized(this.currentCoin, 30);
             });
         }
 
@@ -57,7 +75,7 @@ class CryptoDashboard {
                 this.classList.add('active');
 
                 const timeframe = parseInt(this.getAttribute('data-timeframe'));
-                dashboard.loadCoinData(dashboard.currentCoin, timeframe);
+                dashboard.loadCoinDataOptimized(dashboard.currentCoin, timeframe);
             });
         });
 
@@ -205,30 +223,30 @@ class CryptoDashboard {
         this.showLoadingState('globalMetrics', 'opportunities', 'tradingSignals', 'predictions');
         await this.loadGlobalMetrics();
         await this.loadOpportunities();
-        await this.loadCoinData(this.currentCoin, 30);
+        await this.loadCoinDataOptimized(this.currentCoin, 30);
         this.updateLastUpdatedTime();
     }
 
     async loadGlobalMetrics() {
         try {
             console.log("📊 Cargando métricas globales...");
-            
+
             // Intentar con el endpoint correcto primero
             let response = await fetch('/api/v1/global', {
                 credentials: 'include'
             });
-            
+
             // Si falla, intentar con el endpoint alternativo
             if (!response.ok) {
                 response = await fetch('/api/v1/dashboard/global-metrics', {
                     credentials: 'include'
                 });
             }
-            
+
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            
+
             const data = await response.json();
             this.renderGlobalMetrics(data);
 
@@ -301,64 +319,172 @@ class CryptoDashboard {
         globalMetrics.innerHTML = demoHtml;
     }
 
-    async loadCoinData(coinId, days = 30) {
-        try {
-            console.log(`📈 Cargando datos de ${coinId}...`);
-            this.showLoadingState('tradingSignals', 'predictions');
+    async loadCoinDataOptimized(coinId, days = 30) {
+        // Si ya estamos cargando, no hacer nada
+        if (this.isLoading) {
+            console.log("⏳ Ya hay una carga en curso, esperando...");
+            return;
+        }
 
-            // Primero obtener datos del mercado para esta moneda
+        this.isLoading = true;
+
+        try {
+            console.log(`⚡ Cargando datos OPTIMIZADOS de ${coinId}...`);
+
+            // Mostrar estados de carga solo si no tenemos datos en caché
+            if (!this.dataCache.has(coinId)) {
+                this.showLoadingState('tradingSignals', 'predictions');
+            }
+
+            // Verificar si tenemos datos en caché para mostrar inmediatamente
+            const cachedData = this.dataCache.get(coinId);
+            if (cachedData) {
+                console.log(`📦 Usando datos en CACHÉ para ${coinId}`);
+                this.currentData = cachedData;
+                this.renderQuickStats(this.currentData);
+                this.renderTradingSignals(this.currentData);
+                this.renderPredictions(this.currentData);
+            }
+
+            // Cargar datos frescos en segundo plano
+            const freshData = await this.fetchCoinData(coinId, days);
+
+            if (freshData) {
+                this.currentData = freshData;
+
+                // Actualizar caché
+                this.dataCache.set(coinId, freshData);
+
+                // Renderizar componentes con datos frescos
+                this.renderQuickStats(this.currentData);
+                this.prepareChartData(this.currentData);
+                this.calculateEMA();
+                this.renderCandleChart();
+                this.renderTradingSignals(this.currentData);
+                this.renderPredictions(this.currentData);
+
+                console.log(`✅ Datos FRESCOS cargados para ${coinId}`);
+            }
+
+            this.useDemoMode = false;
+
+        } catch (error) {
+            console.error('Error loading coin data:', error);
+
+            // Si hay error pero tenemos caché, mantener los datos cacheados
+            if (!this.dataCache.has(coinId)) {
+                this.showDemoCoinData(coinId);
+                this.useDemoMode = true;
+            }
+        } finally {
+            this.isLoading = false;
+        }
+    }
+
+    async fetchCoinData(coinId, days) {
+        try {
+            // 1. Obtener datos actuales del mercado
             const marketResponse = await fetch(`/api/v1/coins/markets?vs_currency=usd&ids=${coinId}&per_page=1&page=1`, {
                 credentials: 'include'
             });
-            
-            if (!marketResponse.ok) {
-                throw new Error(`HTTP error! status: ${marketResponse.status}`);
-            }
-            
+
+            if (!marketResponse.ok) throw new Error(`HTTP error! status: ${marketResponse.status}`);
+
             const marketData = await marketResponse.json();
-            const coinData = marketData[0] || {};
-
-            // Luego obtener datos históricos
-            let historicalResponse;
-            try {
-                historicalResponse = await fetch(`/api/v1/coins/markets?vs_currency=usd&ids=${coinId}&days=${days}&per_page=100`, {
-                    credentials: 'include'
-                });
-            } catch (e) {
-                console.log('Usando endpoint alternativo para datos históricos...');
-                historicalResponse = await fetch(`/api/v1/trading/${coinId}/metrics?days=${days}`, {
-                    credentials: 'include'
-                });
+            if (!Array.isArray(marketData) || marketData.length === 0) {
+                throw new Error(`No se encontraron datos para ${coinId}`);
             }
 
-            if (!historicalResponse.ok) {
-                throw new Error(`HTTP error! status: ${historicalResponse.status}`);
-            }
+            const coinData = marketData[0];
 
-            const historicalData = await historicalResponse.json();
+            // 2. Obtener datos históricos (en paralelo si es posible)
+            const historicalPromise = this.fetchHistoricalData(coinId, days);
+            const historicalData = await historicalPromise;
 
-            // Construir el objeto de datos combinados
-            this.currentData = {
+            // 3. Procesar datos
+            const formattedData = this.processChartData(historicalData, coinData);
+
+            return {
                 coin_id: coinId,
                 current_price: coinData.current_price || 0,
                 price_change_24h: coinData.price_change_percentage_24h || 0,
                 market_cap: coinData.market_cap || 0,
                 volume_24h: coinData.total_volume || 0,
-                historical_data: this.formatHistoricalData(historicalData, coinData)
+                historical_data: formattedData
             };
 
-            this.renderQuickStats(this.currentData);
-            this.prepareChartData(this.currentData);
-            this.calculateEMA();
-            this.renderCandleChart();
-            this.renderTradingSignals(this.currentData);
-            this.renderPredictions(this.currentData);
-            this.useDemoMode = false;
-
         } catch (error) {
-            console.error('Error loading coin data:', error);
-            this.showDemoCoinData(coinId);
-            this.useDemoMode = true;
+            console.error('Error en fetchCoinData:', error);
+            throw error;
+        }
+    }
+
+    async fetchHistoricalData(coinId, days) {
+        let endpoint;
+
+        if (days <= 90) {
+            endpoint = `/api/v1/coins/${coinId}/market_chart/last_days?vs_currency=usd&days=${days}`;
+        } else {
+            endpoint = `/api/v1/coins/${coinId}/market_chart/range?vs_currency=usd`;
+        }
+
+        const response = await fetch(endpoint, {
+            credentials: 'include'
+        });
+
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+        return await response.json();
+    }
+
+
+
+    // Al final de loadCoinData, después de calcular EMA
+    debugEMAData() {
+        console.log('🔍 DEBUG EMA DATA:');
+        console.log('OHLC Data length:', this.ohlcData.length);
+        console.log('EMA Data length:', this.emaData.length);
+
+        if (this.ohlcData.length > 0 && this.emaData.length > 0) {
+            const lastPrice = this.ohlcData[this.ohlcData.length - 1].close;
+            const lastEMA = this.emaData[this.emaData.length - 1].value;
+            console.log('Último precio:', lastPrice);
+            console.log('Última EMA:', lastEMA);
+            console.log('Diferencia:', ((lastPrice - lastEMA) / lastEMA * 100).toFixed(2) + '%');
+        }
+    }
+
+    processChartData(apiData, currentData) {
+        // Procesar datos según la estructura de la API
+        if (apiData.prices && Array.isArray(apiData.prices)) {
+            return apiData.prices.map(([timestamp, price], index) => {
+                // Para datos básicos de precio, crear datos OHLC simulados
+                // En una implementación real, sería mejor usar el endpoint OHLC
+                const volatility = 0.02; // 2% de volatilidad diaria
+                const basePrice = price;
+                const randomFactor = 1 + (Math.random() - 0.5) * volatility;
+
+                return {
+                    timestamp: new Date(timestamp).toISOString(),
+                    open: index === 0 ? basePrice : apiData.prices[index - 1][1],
+                    high: basePrice * (1 + Math.random() * volatility),
+                    low: basePrice * (1 - Math.random() * volatility),
+                    close: basePrice,
+                    volume: apiData.total_volumes ? apiData.total_volumes[index][1] : 0
+                };
+            });
+        } else if (Array.isArray(apiData)) {
+            // Si son datos OHLC directos
+            return apiData.map(item => ({
+                timestamp: new Date(item[0]).toISOString(),
+                open: item[1],
+                high: item[2],
+                low: item[3],
+                close: item[4]
+            }));
+        } else {
+            // Fallback a datos demo
+            return this.generateDemoHistoricalData(this.currentCoin);
         }
     }
 
@@ -482,93 +608,17 @@ class CryptoDashboard {
         }
 
         try {
-            // Preparar datos para el gráfico de velas
-            const dates = this.ohlcData.map(item => item.timestamp);
-            const opens = this.ohlcData.map(item => item.open);
-            const highs = this.ohlcData.map(item => item.high);
-            const lows = this.ohlcData.map(item => item.low);
-            const closes = this.ohlcData.map(item => item.close);
+            // Verificar si tenemos un gráfico existente para actualizar en lugar de recrear
+            const existingChart = chartDiv.data;
 
-            // Datos para el gráfico de velas
-            const candleData = [{
-                type: 'candlestick',
-                x: dates,
-                open: opens,
-                high: highs,
-                low: lows,
-                close: closes,
-                yaxis: 'y2',
-                name: 'Precio',
-                increasing: { line: { color: '#28a745' } },
-                decreasing: { line: { color: '#dc3545' } }
-            }];
-
-            // Agregar línea de EMA si está activado
-            const emaToggle = document.getElementById('emaToggle');
-            if (emaToggle && emaToggle.checked && this.emaData.length > 0) {
-                candleData.push({
-                    x: this.emaData.map(item => item.timestamp),
-                    y: this.emaData.map(item => item.value),
-                    type: 'scatter',
-                    mode: 'lines',
-                    name: `EMA (${this.emaPeriod})`,
-                    line: { color: '#667eea', width: 2 },
-                    yaxis: 'y2'
-                });
-
-                // Agregar predicción futura de EMA
-                if (this.futureEmaData.length > 0) {
-                    candleData.push({
-                        x: this.futureEmaData.map(item => item.timestamp),
-                        y: this.futureEmaData.map(item => item.value),
-                        type: 'scatter',
-                        mode: 'lines',
-                        name: `Predicción EMA`,
-                        line: { color: '#ff9900', width: 2, dash: 'dash' },
-                        yaxis: 'y2'
-                    });
-                }
+            if (existingChart && this.chartCache.has(this.currentCoin)) {
+                // ACTUALIZACIÓN RÁPIDA del gráfico existente
+                this.updateExistingChart(chartDiv);
+            } else {
+                // CREAR NUEVO GRÁFICO
+                this.createNewChart(chartDiv);
+                this.chartCache.set(this.currentCoin, true);
             }
-
-            const layout = {
-                title: {
-                    text: `Gráfico de Velas - ${this.currentCoin.toUpperCase()} con EMA ${this.emaPeriod}`,
-                    font: { size: 18, family: 'Arial', color: '#2c3e50' }
-                },
-                xaxis: {
-                    title: 'Fecha',
-                    type: 'date',
-                    rangeslider: { visible: false }
-                },
-                yaxis: {
-                    title: 'Volumen',
-                    side: 'left',
-                    showgrid: false
-                },
-                yaxis2: {
-                    title: 'Precio (USD)',
-                    side: 'right',
-                    overlaying: 'y',
-                    showgrid: true,
-                    tickprefix: '$'
-                },
-                showlegend: true,
-                plot_bgcolor: 'rgba(0,0,0,0)',
-                paper_bgcolor: 'rgba(0,0,0,0)',
-                margin: { l: 60, r: 60, t: 60, b: 50 },
-                font: { family: 'Arial', size: 12 }
-            };
-
-            const config = {
-                responsive: true,
-                displayModeBar: true,
-                displaylogo: false,
-                modeBarButtonsToAdd: ['hoverClosestGl2d'],
-                modeBarButtonsToRemove: ['autoScale2d', 'toggleSpikelines'],
-                scrollZoom: true
-            };
-
-            Plotly.newPlot('candleChart', candleData, layout, config);
         } catch (error) {
             console.error('Error rendering candle chart:', error);
             chartDiv.innerHTML = `
@@ -580,36 +630,200 @@ class CryptoDashboard {
         }
     }
 
+    updateExistingChart(chartDiv) {
+        const dates = this.ohlcData.map(item => item.timestamp);
+        const closes = this.ohlcData.map(item => item.close);
+
+        const update = {
+            'x': [dates],
+            'y': [closes]
+        };
+
+        // Si hay EMA, agregar actualización
+        const emaToggle = document.getElementById('emaToggle');
+        if (emaToggle && emaToggle.checked && this.emaData.length > 0) {
+            update.x.push(this.emaData.map(item => item.timestamp));
+            update.y.push(this.emaData.map(item => item.value));
+
+            if (this.futureEmaData.length > 0) {
+                update.x.push(this.futureEmaData.map(item => item.timestamp));
+                update.y.push(this.futureEmaData.map(item => item.value));
+            }
+        }
+
+        Plotly.react('candleChart', update);
+        console.log("⚡ Gráfico actualizado (modo rápido)");
+    }
+
+    createNewChart(chartDiv) {
+        // Preparar datos para el gráfico de velas
+        const dates = this.ohlcData.map(item => item.timestamp);
+        const opens = this.ohlcData.map(item => item.open);
+        const highs = this.ohlcData.map(item => item.high);
+        const lows = this.ohlcData.map(item => item.low);
+        const closes = this.ohlcData.map(item => item.close);
+
+        // Datos para el gráfico de velas
+        const candleData = [{
+            type: 'candlestick',
+            x: dates,
+            open: opens,
+            high: highs,
+            low: lows,
+            close: closes,
+            yaxis: 'y2',
+            name: 'Precio',
+            increasing: { line: { color: '#28a745' }, fillcolor: '#28a745' },
+            decreasing: { line: { color: '#dc3545' }, fillcolor: '#dc3545' }
+        }];
+
+        // Agregar línea de EMA si está activado
+        const emaToggle = document.getElementById('emaToggle');
+        if (emaToggle && emaToggle.checked && this.emaData.length > 0) {
+            candleData.push({
+                x: this.emaData.map(item => item.timestamp),
+                y: this.emaData.map(item => item.value),
+                type: 'scatter',
+                mode: 'lines',
+                name: `EMA (${this.emaPeriod})`,
+                line: { color: '#667eea', width: 3 },
+                yaxis: 'y2'
+            });
+
+            // Agregar predicción futura de EMA
+            if (this.futureEmaData.length > 0) {
+                candleData.push({
+                    x: this.futureEmaData.map(item => item.timestamp),
+                    y: this.futureEmaData.map(item => item.value),
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: `Predicción EMA (${this.futurePeriods}d)`,
+                    line: { color: '#ff9900', width: 2, dash: 'dot' },
+                    yaxis: 'y2'
+                });
+            }
+        }
+
+        const layout = {
+            title: {
+                text: `Gráfico de Velas - ${this.currentCoin.toUpperCase()} con EMA ${this.emaPeriod}`,
+                font: { size: 16, family: 'Arial', color: '#2c3e50' },
+                x: 0.05,
+                y: 0.95
+            },
+            xaxis: {
+                title: 'Fecha',
+                type: 'date',
+                rangeslider: {
+                    visible: false
+                },
+                tickformat: '%d %b',
+                tickangle: -45,
+                tickmode: 'auto',
+                nticks: 10, // Reducir número de ticks para más espacio
+                showgrid: true,
+                gridcolor: '#f1f3f4',
+                zeroline: false
+            },
+            yaxis: {
+                title: 'Volumen',
+                side: 'left',
+                showgrid: false,
+                showticklabels: false // Ocultar labels del volumen para más espacio
+            },
+            yaxis2: {
+                title: 'Precio (USD)',
+                side: 'right',
+                overlaying: 'y',
+                showgrid: true,
+                gridcolor: '#f1f3f4',
+                tickprefix: '$',
+                tickformat: '$,.0f',
+                zeroline: false
+            },
+            showlegend: true,
+            legend: {
+                x: 0,
+                y: 1.1,
+                orientation: 'h',
+                bgcolor: 'rgba(255,255,255,0.8)'
+            },
+            plot_bgcolor: 'rgba(255,255,255,1)',
+            paper_bgcolor: 'rgba(255,255,255,1)',
+            margin: {
+                l: 10,   // Reducir márgenes izquierdos
+                r: 60,
+                t: 80,   // Más espacio arriba para título
+                b: 80    // Más espacio abajo para labels
+            },
+            font: {
+                family: 'Arial',
+                size: 12,
+                color: '#2c3e50'
+            },
+            hovermode: 'x unified',
+            dragmode: 'zoom'
+        };
+
+        const config = {
+            responsive: true,
+            displayModeBar: true,
+            displaylogo: false,
+            modeBarButtonsToAdd: ['drawline', 'drawopenpath', 'drawclosedpath', 'drawcircle', 'drawrect', 'eraseshape'],
+            modeBarButtonsToRemove: ['lasso2d', 'select2d'],
+            scrollZoom: true,
+            doubleClick: 'reset'
+        };
+
+        Plotly.newPlot('candleChart', candleData, layout, config);
+        console.log("📊 Nuevo gráfico creado");
+    }
+
     renderQuickStats(data) {
         const quickStats = document.getElementById('quickStats');
         if (!quickStats || !data) return;
 
-        const priceChange = typeof data.price_change_24h === 'number'
-            ? data.price_change_24h
-            : parseFloat(data.price_change_24h) || 0;
+        console.log('📊 Renderizando quickStats con datos:', {
+            moneda: this.currentCoin,
+            precio: data.current_price,
+            cambio: data.price_change_24h,
+            marketCap: data.market_cap,
+            volumen: data.volume_24h
+        });
 
-        const statsHtml = `
-            <div class="stat-item">
-                <small>Precio Actual</small>
-                <h4 class="mb-0">$${data.current_price?.toFixed(2) || '0.00'}</h4>
-            </div>
-            <div class="stat-item">
-                <small>Cambio 24h</small>
-                <h4 class="mb-0 ${priceChange >= 0 ? 'text-success' : 'text-danger'}">
-                    ${priceChange.toFixed(2)}%
-                </h4>
-            </div>
-            <div class="stat-item">
-                <small>Market Cap</small>
-                <h4 class="mb-0">$${this.formatNumber(data.market_cap)}</h4>
-            </div>
-            <div class="stat-item">
-                <small>Volumen 24h</small>
-                <h4 class="mb-0">$${this.formatNumber(data.volume_24h)}</h4>
-            </div>
-        `;
+        requestAnimationFrame(() => {
+            // Asegurar que los valores sean números y tengan valores por defecto
+            const currentPrice = parseFloat(data.current_price) || 0;
+            const priceChange = parseFloat(data.price_change_24h) || 0;
+            const marketCap = parseFloat(data.market_cap) || 0;
+            const volume24h = parseFloat(data.volume_24h) || 0;
 
-        quickStats.innerHTML = statsHtml;
+            const statsHtml = `
+                <div class="stat-item">
+                    <small class="text-muted">Precio Actual</small>
+                    <h4 class="mb-0 text-primary">$${currentPrice.toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: currentPrice < 1 ? 6 : 2
+            })}</h4>
+                    <small class="text-muted">${this.currentCoin.toUpperCase()}</small>
+                </div>
+                <div class="stat-item">
+                    <small class="text-muted">Cambio 24h</small>
+                    <h4 class="mb-0 ${priceChange >= 0 ? 'text-success' : 'text-danger'}">
+                        ${priceChange >= 0 ? '+' : ''}${priceChange.toFixed(2)}%
+                    </h4>
+                </div>
+                <div class="stat-item">
+                    <small class="text-muted">Market Cap</small>
+                    <h4 class="mb-0">$${this.formatNumber(marketCap)}</h4>
+                </div>
+                <div class="stat-item">
+                    <small class="text-muted">Volumen 24h</small>
+                    <h4 class="mb-0">$${this.formatNumber(volume24h)}</h4>
+                </div>
+            `;
+            quickStats.innerHTML = statsHtml;
+        });
     }
 
     // redireccion a la página de simulacion
@@ -630,100 +844,188 @@ class CryptoDashboard {
 
         if (!signalsDiv) return;
 
-        // Generar señales basadas en EMA
+        // Generar señales inmediatamente con datos disponibles
         const signals = this.generateEMASignals();
 
-        let signalsHtml = '<h6>Señales de Trading en Tiempo Real:</h6>';
-        tradeActionsDiv.innerHTML = '';
-
-        if (signals.length === 0) {
-            signalsHtml += `
-                <div class="alert alert-info">
-                    <p>No hay señales fuertes en este momento</p>
-                    <small>Esperando cruces significativos de EMA</small>
+        requestAnimationFrame(() => {
+            let signalsHtml = `
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0">Señales de Trading:</h6>
+                    <small class="text-muted">EMA${this.emaPeriod}</small>
                 </div>
             `;
-        } else {
-            signals.forEach(signal => {
-                const alertClass = signal.type === 'BUY' ? 'alert-success' : 'alert-danger';
 
+            if (signals.length === 0) {
                 signalsHtml += `
-                    <div class="alert ${alertClass}">
-                        <div class="d-flex justify-content-between align-items-start">
+                    <div class="alert alert-warning">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-info-circle me-2"></i>
                             <div>
-                                <h6 class="mb-1">${signal.type} 
-                                    <span class="badge bg-${signal.confidence === 'high' ? 'success' : signal.confidence === 'medium' ? 'warning' : 'secondary'}">
-                                        ${signal.confidence.toUpperCase()}
-                                    </span>
-                                </h6>
-                                <p class="mb-1">${signal.reason}</p>
-                                <small class="text-muted">${new Date(signal.timestamp).toLocaleString()}</small>
+                                <p class="mb-1">No hay señales claras</p>
+                                <small class="text-muted">Precio cerca de la EMA</small>
                             </div>
                         </div>
                     </div>
                 `;
+            } else {
+                signals.forEach(signal => {
+                    const alertClass = signal.type === 'BUY' ? 'alert-success' :
+                        signal.type === 'SELL' ? 'alert-danger' : 'alert-warning';
 
-                // mostramos el boton de comprar/vender según la señal
-                if (signal.type === 'BUY') {
-                    tradeActionsDiv.innerHTML = `
-                        <button class="btn btn-success" id="buyBtn" 
-                            onclick="dashboard.executeTrade('buy')">
-                            Comprar ${this.currentCoin}
-                        </button>`;
-                } else if (signal.type === 'SELL') {
-                    tradeActionsDiv.innerHTML = `
-                        <button class="btn btn-danger" id="sellBtn" 
-                            onclick="dashboard.executeTrade('sell')">
-                            Vender ${this.currentCoin}
-                        </button>`;
-                }
-            });
-        }
+                    const icon = signal.type === 'BUY' ? 'bi-arrow-up-circle' :
+                        signal.type === 'SELL' ? 'bi-arrow-down-circle' : 'bi-pause-circle';
 
-        signalsDiv.innerHTML = signalsHtml;
+                    signalsHtml += `
+                        <div class="alert ${alertClass}">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <i class="bi ${icon} me-2"></i>
+                                        <h6 class="mb-0">${signal.type}</h6>
+                                        <span class="badge bg-${signal.confidence === 'high' ? 'success' : signal.confidence === 'medium' ? 'warning' : 'secondary'} ms-2">
+                                            ${signal.confidence.toUpperCase()}
+                                        </span>
+                                    </div>
+                                    <p class="mb-2 small">${signal.reason}</p>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <small class="text-muted">
+                                            <i class="bi bi-clock me-1"></i>
+                                            ${new Date(signal.timestamp).toLocaleTimeString()}
+                                        </small>
+                                        <small class="text-muted">
+                                            Precio: $${signal.price.toFixed(2)}
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+                    // Botones de acción
+                    if (signal.type === 'BUY' && signal.confidence === 'high') {
+                        tradeActionsDiv.innerHTML = `
+                            <div class="text-center">
+                                <button class="btn btn-success btn-lg" id="buyBtn" 
+                                    onclick="dashboard.executeTrade('buy')">
+                                    <i class="bi bi-arrow-up-circle me-2"></i>
+                                    Comprar ${this.currentCoin.toUpperCase()}
+                                </button>
+                            </div>
+                        `;
+                    } else if (signal.type === 'SELL' && signal.confidence === 'high') {
+                        tradeActionsDiv.innerHTML = `
+                            <div class="text-center">
+                                <button class="btn btn-danger btn-lg" id="sellBtn" 
+                                    onclick="dashboard.executeTrade('sell')">
+                                    <i class="bi bi-arrow-down-circle me-2"></i>
+                                    Vender ${this.currentCoin.toUpperCase()}
+                                </button>
+                            </div>
+                        `;
+                    }
+                });
+            }
+
+            signalsDiv.innerHTML = signalsHtml;
+        });
     }
 
     generateEMASignals() {
         const signals = [];
-        if (this.emaData.length < 2) return signals;
+
+        // Verificar que tenemos datos suficientes
+        if (!this.emaData || this.emaData.length < 2 || !this.ohlcData || this.ohlcData.length < 2) {
+            console.warn('❌ Datos insuficientes para generar señales EMA');
+            console.log('EMA Data length:', this.emaData?.length);
+            console.log('OHLC Data length:', this.ohlcData?.length);
+            return signals;
+        }
 
         const currentPrice = this.ohlcData[this.ohlcData.length - 1].close;
         const currentEma = this.emaData[this.emaData.length - 1].value;
+        const previousPrice = this.ohlcData[this.ohlcData.length - 2].close;
         const previousEma = this.emaData[this.emaData.length - 2].value;
+
         const priceVsEma = ((currentPrice - currentEma) / currentEma) * 100;
 
-        // Señal de compra: precio cruza por encima de la EMA
-        if (currentPrice > currentEma && this.ohlcData[this.ohlcData.length - 2].close <= previousEma) {
+        console.log('🔍 ANALIZANDO SEÑALES EMA:', {
+            currentPrice: `$${currentPrice.toFixed(2)}`,
+            currentEma: `$${currentEma.toFixed(2)}`,
+            previousPrice: `$${previousPrice.toFixed(2)}`,
+            previousEma: `$${previousEma.toFixed(2)}`,
+            diferenciaPrecioEMA: `${priceVsEma.toFixed(2)}%`,
+            condicionCompra: `Precio > EMA: ${currentPrice > currentEma}, PrecioAnterior <= EMAAnterior: ${previousPrice <= previousEma}`,
+            condicionVenta: `Precio < EMA: ${currentPrice < currentEma}, PrecioAnterior >= EMAAnterior: ${previousPrice >= previousEma}`
+        });
+
+        // 1. Señal de COMPRA FUERTE: Precio cruza claramente por encima de la EMA
+        if (currentPrice > currentEma && previousPrice <= previousEma) {
             const signal = {
                 type: 'BUY',
-                confidence: Math.abs(priceVsEma) > 2 ? 'high' : 'medium',
-                reason: `Precio cruzó por encima de la EMA${this.emaPeriod}. El precio está ${Math.abs(priceVsEma).toFixed(2)}% por encima de la EMA.`,
+                confidence: Math.abs(priceVsEma) > 0.5 ? 'high' : 'medium',
+                reason: `🚀 PRECIO CRUZÓ POR ENCIMA de la EMA${this.emaPeriod}. El precio está ${priceVsEma.toFixed(2)}% por encima de la EMA. Señal de compra.`,
                 price: currentPrice,
                 emaValue: currentEma,
                 timestamp: new Date().toISOString()
             };
             signals.push(signal);
+            console.log('✅ SEÑAL COMPRA GENERADA:', signal);
 
-            // Enviar notificación por email
             this.sendEmaNotification(signal);
+        } else if (currentPrice > currentEma && priceVsEma > 0.3) {
+            const signal = {
+                type: 'BUY',
+                confidence: 'low',
+                reason: `📈 Precio ${priceVsEma.toFixed(2)}% por encima de la EMA${this.emaPeriod}. Tendencia alcista. Considerar compra.`,
+                price: currentPrice,
+                emaValue: currentEma,
+                timestamp: new Date().toISOString()
+            };
+            signals.push(signal);
+            console.log('✅ SEÑAL COMPRA DÉBIL GENERADA:', signal);
         }
 
-        // Señal de venta: precio cruza por debajo de la EMA
-        if (currentPrice < currentEma && this.ohlcData[this.ohlcData.length - 2].close >= previousEma) {
+        // 3. Señal de VENTA FUERTE: Precio cruza claramente por debajo de la EMA
+        if (currentPrice < currentEma && previousPrice >= previousEma) {
             const signal = {
                 type: 'SELL',
-                confidence: Math.abs(priceVsEma) > 2 ? 'high' : 'medium',
-                reason: `Precio cruzó por debajo de la EMA${this.emaPeriod}. El precio está ${Math.abs(priceVsEma).toFixed(2)}% por debajo de la EMA.`,
+                confidence: Math.abs(priceVsEma) > 0.5 ? 'high' : 'medium',
+                reason: `🔻 PRECIO CRUZÓ POR DEBAJO de la EMA${this.emaPeriod}. El precio está ${Math.abs(priceVsEma).toFixed(2)}% por debajo de la EMA. Señal de venta.`,
                 price: currentPrice,
                 emaValue: currentEma,
                 timestamp: new Date().toISOString()
             };
             signals.push(signal);
+            console.log('✅ SEÑAL VENTA GENERADA:', signal);
 
-            // Enviar notificación por email
             this.sendEmaNotification(signal);
+        } else if (currentPrice < currentEma && priceVsEma < -0.3) {
+            const signal = {
+                type: 'SELL',
+                confidence: 'low',
+                reason: `📉 Precio ${Math.abs(priceVsEma).toFixed(2)}% por debajo de la EMA${this.emaPeriod}. Tendencia bajista. Considerar venta.`,
+                price: currentPrice,
+                emaValue: currentEma,
+                timestamp: new Date().toISOString()
+            };
+            signals.push(signal);
+            console.log('✅ SEÑAL VENTA DÉBIL GENERADA:', signal);
         }
 
+        // 5. Señal de HOLD: Precio muy cerca de la EMA
+        if (signals.length === 0 && Math.abs(priceVsEma) < 0.3) {
+            signals.push({
+                type: 'HOLD',
+                confidence: 'medium',
+                reason: `⚖️ Precio muy cerca de la EMA${this.emaPeriod} (${priceVsEma.toFixed(2)}%). Esperando señal más clara.`,
+                price: currentPrice,
+                emaValue: currentEma,
+                timestamp: new Date().toISOString()
+            });
+            console.log('✅ SEÑAL HOLD GENERADA');
+        }
+
+        console.log(`📊 TOTAL SEÑALES GENERADAS: ${signals.length}`);
         return signals;
     }
 
@@ -762,47 +1064,73 @@ class CryptoDashboard {
         const predictionsDiv = document.getElementById('predictions');
         if (!predictionsDiv) return;
 
-        if (this.futureEmaData && this.futureEmaData.length > 0) {
-            // Usar predicción EMA
-            const currentPrice = this.ohlcData[this.ohlcData.length - 1].close;
-            const lastPrediction = this.futureEmaData[this.futureEmaData.length - 1].value;
-            const changePercentage = ((lastPrediction - currentPrice) / currentPrice) * 100;
-            const trend = changePercentage >= 0 ? 'alcista' : 'bajista';
+        requestAnimationFrame(() => {
+            if (this.futureEmaData && this.futureEmaData.length > 0) {
+                const currentPrice = this.ohlcData[this.ohlcData.length - 1].close;
+                const lastPrediction = this.futureEmaData[this.futureEmaData.length - 1].value;
+                const changePercentage = ((lastPrediction - currentPrice) / currentPrice) * 100;
+                const trend = changePercentage >= 0 ? 'alcista' : 'bajista';
 
-            let predictionsHtml = `
-                <h6>Predicción para ${this.futurePeriods} días:</h6>
-                <div class="card mb-3">
-                    <div class="card-body">
-                        <h5 class="card-title ${changePercentage >= 0 ? 'text-success' : 'text-danger'}">
-                            ${changePercentage >= 0 ? '📈' : '📉'} ${Math.abs(changePercentage).toFixed(2)}%
-                        </h5>
-                        <p class="card-text">
-                            Tendencia ${trend} esperada según EMA${this.emaPeriod}.
-                        </p>
-                        <div class="row">
-                            <div class="col-6">
-                                <small>Precio actual:</small>
-                                <p class="mb-0 fw-bold">$${currentPrice.toFixed(2)}</p>
-                            </div>
-                            <div class="col-6">
-                                <small>Predicción:</small>
-                                <p class="mb-0 fw-bold">$${lastPrediction.toFixed(2)}</p>
+                predictionsDiv.innerHTML = `
+                    <h6>Predicción ${this.futurePeriods}d:</h6>
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h5 class="card-title ${changePercentage >= 0 ? 'text-success' : 'text-danger'}">
+                                ${changePercentage >= 0 ? '📈' : '📉'} ${Math.abs(changePercentage).toFixed(2)}%
+                            </h5>
+                            <p class="card-text">
+                                Tendencia ${trend} (EMA${this.emaPeriod})
+                            </p>
+                            <div class="row">
+                                <div class="col-6">
+                                    <small>Actual:</small>
+                                    <p class="mb-0 fw-bold">$${currentPrice.toFixed(2)}</p>
+                                </div>
+                                <div class="col-6">
+                                    <small>Predicción:</small>
+                                    <p class="mb-0 fw-bold">$${lastPrediction.toFixed(2)}</p>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            `;
+                `;
+            } else {
+                predictionsDiv.innerHTML = `
+                    <div class="alert alert-info">
+                        <h6>🔮 Predicciones</h6>
+                        <p>Calculando...</p>
+                    </div>
+                `;
+            }
+        });
+    }
 
-            predictionsDiv.innerHTML = predictionsHtml;
-        } else {
-            predictionsDiv.innerHTML = `
-                <div class="alert alert-info">
-                    <h6>🔮 Predicciones</h6>
-                    <p>No hay predicciones disponibles</p>
-                    <small>Calcule la EMA para ver predicciones</small>
-                </div>
-            `;
-        }
+    // LIMPIAR CACHÉ cuando sea necesario
+    clearCache() {
+        this.dataCache.clear();
+        this.chartCache.clear();
+        console.log("🗑️ Caché limpiado");
+    }
+
+    // Precargar datos de monedas populares
+    async preloadPopularCoins() {
+        const popularCoins = ['ethereum', 'binancecoin', 'cardano', 'solana'];
+        
+        console.log("🔮 Precargando datos de monedas populares...");
+        
+        // Precargar en segundo plano sin bloquear la UI
+        popularCoins.forEach(coin => {
+            setTimeout(() => {
+                this.fetchCoinData(coin, 30).then(data => {
+                    if (data) {
+                        this.dataCache.set(coin, data);
+                        console.log(`✅ Precargado: ${coin}`);
+                    }
+                }).catch(error => {
+                    console.log(`❌ Error precargando ${coin}:`, error);
+                });
+            }, 1000); // Espaciar las peticiones
+        });
     }
 
     showDemoCoinData(coinId) {
@@ -830,7 +1158,7 @@ class CryptoDashboard {
             tradingSignals.innerHTML += `
                 <div class="alert alert-warning mt-3">
                     <small>⚠️ Modo offline: Datos simulados</small>
-                    <button onclick="dashboard.loadCoinData('${coinId}')" class="btn btn-sm btn-outline-warning ms-2">
+                    <button onclick="dashboard.loadCoinDataRobust('${coinId}')" class="btn btn-sm btn-outline-warning ms-2">
                         Reintentar
                     </button>
                 </div>
@@ -868,7 +1196,7 @@ class CryptoDashboard {
     async loadOpportunities() {
         try {
             console.log("💎 Buscando oportunidades...");
-            
+
             // Intentar diferentes endpoints para oportunidades
             let response;
             try {
@@ -880,11 +1208,11 @@ class CryptoDashboard {
                     credentials: 'include'
                 });
             }
-            
+
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            
+
             const data = await response.json();
             this.renderOpportunities(Array.isArray(data) ? data : (data.opportunities || data));
 
@@ -915,7 +1243,7 @@ class CryptoDashboard {
 
             opportunitiesHtml += `
                 <div class="col-md-4 mb-3">
-                    <div class="card opportunity-card" onclick="dashboard.loadCoinData('${coin.id || 'bitcoin'}')">
+                    <div class="card opportunity-card" onclick="dashboard.loadCoinDataRobust('${coin.id || 'bitcoin'}')">
                         <div class="card-body">
                             <h6 class="card-title">${coin.name || 'Unknown'} 
                                 <small class="text-muted">(${coin.symbol ? coin.symbol.toUpperCase() : 'N/A'})</small>
@@ -1098,7 +1426,7 @@ class CryptoDashboard {
                 method: 'POST',
                 credentials: 'include'
             });
-            
+
             if (response.ok) {
                 window.location.href = '/';
             } else {
@@ -1113,4 +1441,9 @@ class CryptoDashboard {
 // Inicializar dashboard cuando el DOM esté listo
 document.addEventListener('DOMContentLoaded', function () {
     window.dashboard = new CryptoDashboard();
+
+    // Precargar monedas populares después de que todo esté listo
+    setTimeout(() => {
+        window.dashboard.preloadPopularCoins();
+    }, 3000);
 });

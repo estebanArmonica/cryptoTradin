@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List
 from app.core.coingecko import CoinGeckoClient
 from app.models.schemas import *
 from app.utils.exceptions import handle_api_error
+from datetime import datetime, timedelta
 
 router = APIRouter()
 client = CoinGeckoClient()
@@ -65,7 +66,7 @@ def get_coin_list():
 
 # creamos una función para obtener el mercado de criptomonedas
 @router.get("/coins/markets", response_model=List[CoinMarket], tags=["Cryptocurrencies"])
-def get_coin_market(vs_currency: str = "usd", order: str = "market_cap_desc", per_page: int = 100, page: int = 1):  
+def get_coin_market(vs_currency: str = "usd", order: str = "market_cap_desc", per_page: int = 100, page: int = 1, ids: str = None):  
     """
     Obtiene el mercado de criptomonedas.
     
@@ -73,9 +74,10 @@ def get_coin_market(vs_currency: str = "usd", order: str = "market_cap_desc", pe
     - **order**: Orden de los resultados (ej. 'market_cap_desc', 'volume_desc', etc.)
     - **per_page**: Número de resultados por página
     - **page**: Número de página a obtener
+    - **ids**: IDs de criptomonedas separados por comas (ej. 'bitcoin,ethereum')
     """
     try:
-        market_data = client.get_coin_market(vs_currency=vs_currency, order=order, per_page=per_page, page=page)
+        market_data = client.get_coin_market(vs_currency=vs_currency, order=order, per_page=per_page, page=page, ids=ids)
         return [CoinMarket(**coin) for coin in market_data]
     except Exception as e:
         raise handle_api_error(e, "Error al obtener el mercado de criptomonedas")
@@ -176,22 +178,93 @@ def get_coin_history_by_id_date(coin_id: str, date: str, localization: str = 'fa
     except Exception as e:
         raise handle_api_error(e, f"Error al obtener datos históricos para {coin_id} en la fecha {date}")
 
+
+# funciones para obtener el año actual
+def get_current_year_timestamps() -> tuple[int, int]:
+    """
+    Retorna timestamps para el año actual.
+    Desde el inicio del año hasta ahora.
+    """
+    now = datetime.now()
+    start_of_year = datetime(now.year, 1, 1)
+    
+    from_timestamp = int(start_of_year.timestamp())
+    to_timestamp = int(now.timestamp())
+    
+    return from_timestamp, to_timestamp
+
+def get_last_365_days_timestamps() -> tuple[int, int]:
+    """
+    Retorna timestamps de los últimos 365 días.
+    """
+    now = datetime.now()
+    start_date = now - timedelta(days=365)
+    
+    from_timestamp = int(start_date.timestamp())
+    to_timestamp = int(now.timestamp())
+    
+    return from_timestamp, to_timestamp
+
 @router.get("/coins/{coin_id}/market_chart/range", response_model=CoinMarketChartRange, tags=["Cryptocurrencies"])
 def get_coin_market_chart_range(
     coin_id: str, 
-    vs_currency: str, 
-    from_timestamp: int, 
-    to_timestamp: int
+    vs_currency: str = 'usd',
 ):
     """
     Obtiene datos de mercado en un rango de tiempo específico.
     
     - **coin_id**: ID de la criptomoneda (ej. 'bitcoin')
     - **vs_currency**: Moneda de referencia (ej. 'usd')
-    - **from_timestamp**: Timestamp de inicio (ej. 1392577232)
-    - **to_timestamp**: Timestamp de fin (ej. 1422577232)
     """
     try:
+        # obtiene el timestamp actual
+        from_timestamp, to_timestamp = get_current_year_timestamps()
+        print(f"Consultando: {coin_id}, {vs_currency}, {from_timestamp} -> {to_timestamp}")
+        
+        chart_data = client.get_coin_market_chart_range_by_id(
+            id=coin_id,
+            vs_currency=vs_currency,
+            from_timestamp=from_timestamp,
+            to_timestamp=to_timestamp
+        )
+        # Verifica la estructura de los datos recibidos
+        print(f"Datos recibidos - Precios: {len(chart_data.get('prices', []))} elementos")
+        print(f"Datos recibidos - Market Caps: {len(chart_data.get('market_caps', []))} elementos")
+        print(f"Datos recibidos - Volúmenes: {len(chart_data.get('total_volumes', []))} elementos")
+
+        return CoinMarketChartRange(**chart_data)
+    except Exception as e:
+        # Log detallado del error
+        print(f"Error completo: {str(e)}")
+        print(f"Tipo de error: {type(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+
+        raise handle_api_error(e, f"Error al obtener datos de mercado en rango para {coin_id}")
+
+# el mismo para ultimos 30 dias
+@router.get("/coins/{coin_id}/market_chart/last_days", response_model=CoinMarketChartRange, tags=["Cryptocurrencies"])
+def get_coin_market_chart_last_days(
+    coin_id: str, 
+    vs_currency: str = "usd",
+    days: int = Query(30, ge=1, le=365, description="Número de días (1-365)")
+):
+    """
+    Obtiene datos de mercado de los últimos N días.
+    
+    - **coin_id**: ID de la criptomoneda (ej. 'bitcoin')
+    - **vs_currency**: Moneda de referencia (ej. 'usd')
+    - **days**: Número de días hacia atrás (1-365)
+    """
+    try:
+        now = datetime.now()
+        start_date = now - timedelta(days=days)
+        
+        from_timestamp = int(start_date.timestamp())
+        to_timestamp = int(now.timestamp())
+        
+        print(f"Consultando últimos {days} días: {from_timestamp} -> {to_timestamp}")
+        
         chart_data = client.get_coin_market_chart_range_by_id(
             id=coin_id,
             vs_currency=vs_currency,
@@ -200,10 +273,10 @@ def get_coin_market_chart_range(
         )
         return CoinMarketChartRange(**chart_data)
     except Exception as e:
-        raise handle_api_error(e, f"Error al obtener datos de mercado en rango para {coin_id}")
+        raise handle_api_error(e, f"Error al obtener datos de los últimos {days} días para {coin_id}")
 
 @router.get("/coins/{coin_id}/ohlc", response_model=List[OHLCData], tags=["Cryptocurrencies"])
-def get_coin_ohlc(coin_id: str, vs_currency: str, days: int):
+def get_coin_ohlc(coin_id: str, vs_currency: str, days: int = Query(..., ge=1, le=365)):
     """
     Obtiene datos OHLC de una criptomoneda.
     
@@ -212,11 +285,30 @@ def get_coin_ohlc(coin_id: str, vs_currency: str, days: int):
     - **days**: Número de días (1, 7, 14, 30, 90, 180, 365, max)
     """
     try:
-        ohlc_data = client.get_coin_ohlc_by_id_range(id=coin_id, vs_currency=vs_currency, days=days)
-        return [OHLCData(**item) for item in ohlc_data]
+        ohlc_data = client.get_coin_ohlc(id=coin_id, vs_currency=vs_currency, days=days)
+        
+        print(f"Datos OHLC recibidos: {len(ohlc_data)} elementos")
+        if ohlc_data:
+            print(f"Primer elemento: {ohlc_data[0]}")
+            print(f"Tipo del primer elemento: {type(ohlc_data[0])}")
+        
+        # Convertir lista de listas a lista de OHLCData
+        formatted_data = []
+        for item in ohlc_data:
+            if isinstance(item, list) and len(item) == 5:
+                formatted_data.append(OHLCData.from_list(item))
+            else:
+                print(f"Elemento inesperado: {item}")
+        
+        print(f"Datos formateados: {len(formatted_data)} elementos")
+        return formatted_data
     except Exception as e:
+        print(f"Error en endpoint OHLC: {e}")
+        print(f"Tipo de error: {type(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         raise handle_api_error(e, f"Error al obtener datos OHLC para {coin_id}")
-
+    
 #===================================================================================
 # ENDPOINTS DE EXCHANGES
 #===================================================================================

@@ -189,6 +189,23 @@ class OHLCData(BaseModel):
     low: float
     close: float
 
+    @classmethod
+    def from_list(cls, data_list: List[float]) -> 'OHLCData':
+        """
+        Crea una instancia de OHLCData desde una lista.
+        Formato esperado: [timestamp, open, high, low, close]
+        """
+        if len(data_list) != 5:
+            raise ValueError(f"La lista OHLC debe tener 5 elementos, tiene {len(data_list)}")
+        
+        return cls(
+            timestamp=int(data_list[0] / 1000),  # Convertir de ms a segundos si es necesario
+            open=data_list[1],
+            high=data_list[2],
+            low=data_list[3],
+            close=data_list[4]
+        )
+
 class Exchange(BaseModel):
     """
     Modelo básico de exchange.
