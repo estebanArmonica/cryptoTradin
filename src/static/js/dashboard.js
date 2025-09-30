@@ -25,6 +25,15 @@ class CryptoDashboard {
         // Precarga de datos esenciales
         this.essentialCoins = ['bitcoin', 'ethereum', 'binancecoin', 'solana', 'cardano'];
 
+        this.apiStatus = 'checking';
+
+        this.performanceMetrics = {
+            totalRequests: 0,
+            failedRequests: 0,
+            cacheHits: 0,
+            averageLoadTime: 0
+        };
+
         this.init();
     }
 
@@ -39,42 +48,65 @@ class CryptoDashboard {
         });
     }
 
+    // Método para monitorear performance
+    logPerformance() {
+        const successRate = ((this.performanceMetrics.totalRequests - this.performanceMetrics.failedRequests) / this.performanceMetrics.totalRequests * 100).toFixed(1);
+        console.log(`📊 Performance: ${this.performanceMetrics.totalRequests} requests, ${successRate}% éxito, ${this.performanceMetrics.cacheHits} cache hits`);
+    }
+
+    // Método para verificar estado de la API
+    async checkAPIStatus() {
+        try {
+            const response = await this.fetchWithTimeout('/api/v1/health', 3000);
+            if (response.ok) {
+                this.apiStatus = 'online';
+            } else {
+                this.apiStatus = 'degraded';
+            }
+        } catch (error) {
+            this.apiStatus = 'offline';
+        }
+
+        console.log(`🌐 Estado API: ${this.apiStatus}`);
+        return this.apiStatus;
+    }
+
     // En init, manejar mejor la inicialización
+    // En el init, verificar estado
     async init() {
         console.log("🚀 Inicializando dashboard...");
         this.updateLastUpdatedTime();
 
+        // Verificar estado de API primero
+        await this.checkAPIStatus();
+
         try {
-            // Cargar primero datos globales (más rápido)
             await this.loadGlobalMetrics();
 
-            // Luego cargar datos de la moneda actual con timeout
-            await Promise.race([
-                this.loadCoinDataOptimized(this.currentCoin, 30),
-                new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Timeout carga inicial')), 20000)
-                )
-            ]);
-
-            console.log("✅ Dashboard inicializado correctamente");
+            if (this.apiStatus === 'online') {
+                await Promise.race([
+                    this.loadCoinDataOptimized(this.currentCoin, 7),
+                    new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error('Timeout carga datos')), 10000)
+                    )
+                ]);
+            } else {
+                // Si API está offline, cargar datos demo inmediatamente
+                this.showDemoGlobalMetrics();
+                this.showDemoCoinData(this.currentCoin);
+                console.log("🔧 Modo demo - API no disponible");
+            }
 
         } catch (error) {
-            console.error('❌ Error en inicialización:', error);
-            // Cargar datos demo como fallback
+            console.error('❌ Error en inicialización:', error.message);
             this.showDemoGlobalMetrics();
             this.showDemoCoinData(this.currentCoin);
-            console.log("🔧 Modo demo activado debido a errores de inicialización");
         }
 
         this.setupEventListeners();
         this.startAutoRefresh();
         this.handleVisibilityChange();
         this.loadNotificationSettings();
-
-        // Precargar después de un delay
-        setTimeout(() => {
-            this.preloadPopularCoins();
-        }, 10000);
     }
 
     async loadCriticalDataSequentially() {
@@ -597,59 +629,68 @@ class CryptoDashboard {
         `;
     }
 
-
-
-    async fetchCoinDataOptimized(coinId, days) {
+    async fetchCoinDataOptimized(coinId, days = 30) {
         try {
             console.log(`🔍 Intentando cargar datos para ${coinId}...`);
 
-            // Usar endpoints que SÍ existen en tu API
-            const [marketData, historicalData] = await Promise.allSettled([
-                this.fetchWithRetry(`/api/v1/coins/markets?vs_currency=usd&ids=${coinId}&per_page=1&page=1`, 10000),
-                this.fetchWithRetry(`/api/v1/coins/${coinId}/market_chart/last_days?vs_currency=usd&days=${Math.min(days, 30)}`, 15000)
-            ]);
-
+            // ESTRATEGIA MEJORADA: Intentar endpoints en secuencia con fallbacks
             let marketJson = null;
             let historicalJson = null;
 
-            // Procesar marketData
-            if (marketData.status === 'fulfilled' && marketData.value.ok) {
-                marketJson = await marketData.value.json();
-                console.log(`✅ Market data obtenido para ${coinId}`);
-            } else {
-                console.warn(`❌ Falló market data para ${coinId}`);
+            // PRIMERO: Intentar datos de mercado (críticos)
+            try {
+                const marketResponse = await this.fetchWithRetry(
+                    `/api/v1/coins/markets?vs_currency=usd&ids=${coinId}&per_page=1&page=1`,
+                    5000, // Timeout más corto
+                    1     // Solo 1 reintento
+                );
+
+                if (marketResponse.ok) {
+                    marketJson = await marketResponse.json();
+                    console.log(`✅ Market data obtenido para ${coinId}`);
+                }
+            } catch (marketError) {
+                console.warn(`❌ Falló market data para ${coinId}:`, marketError.message);
+                // Continuar sin lanzar error inmediatamente
             }
 
-            // Procesar historicalData
-            if (historicalData.status === 'fulfilled' && historicalData.value.ok) {
-                historicalJson = await historicalData.value.json();
-                console.log(`✅ Historical data obtenido para ${coinId}`);
-            } else {
-                console.warn(`❌ Falló historical data para ${coinId}`);
+            // SEGUNDO: Intentar datos históricos (opcionales)
+            try {
+                const historicalResponse = await this.fetchWithRetry(
+                    `/api/v1/coins/${coinId}/market_chart/last_days?vs_currency=usd&days=${Math.min(days, 7)}`,
+                    7000,
+                    1
+                );
+
+                if (historicalResponse.ok) {
+                    historicalJson = await historicalResponse.json();
+                    console.log(`✅ Historical data obtenido para ${coinId}`);
+                }
+            } catch (historicalError) {
+                console.warn(`⚠️ Historical data falló para ${coinId}:`, historicalError.message);
+                // Los datos históricos pueden fallar sin problema
             }
 
-            // Si ambos fallan, usar datos demo
-            if (!marketJson && !historicalJson) {
-                throw new Error('Todos los endpoints fallaron');
+            // TERCERO: Si no hay datos de mercado, usar datos demo
+            if (!marketJson || !Array.isArray(marketJson) || marketJson.length === 0) {
+                console.warn(`🔄 Usando datos demo para ${coinId} - API no disponible`);
+                return this.generateDemoCoinData(coinId);
             }
 
-            // Extraer datos de marketData (si está disponible)
-            const coinData = marketJson && Array.isArray(marketJson) && marketJson.length > 0
-                ? marketJson[0]
-                : null;
+            const coinData = marketJson[0];
 
             return {
                 coin_id: coinId,
-                current_price: coinData?.current_price || 0,
-                price_change_24h: coinData?.price_change_percentage_24h || 0,
-                market_cap: coinData?.market_cap || 0,
-                volume_24h: coinData?.total_volume || 0,
-                historical_data: this.processOptimizedHistoricalData(historicalJson)
+                current_price: coinData.current_price || 0,
+                price_change_24h: coinData.price_change_percentage_24h || 0,
+                market_cap: coinData.market_cap || 0,
+                volume_24h: coinData.total_volume || 0,
+                historical_data: this.processOptimizedHistoricalData(historicalJson, coinData.current_price)
             };
 
         } catch (error) {
-            console.error('Error en fetchCoinDataOptimized:', error);
-            // Fallback a datos demo
+            console.error('Error crítico en fetchCoinDataOptimized:', error);
+            // Fallback definitivo a datos demo
             return this.generateDemoCoinData(coinId);
         }
     }
@@ -670,24 +711,25 @@ class CryptoDashboard {
         };
     }
 
-    processOptimizedHistoricalData(chartData) {
+    processOptimizedHistoricalData(chartData, currentPrice = null) {
         if (!chartData || !chartData.prices) {
-            console.warn('📊 No hay datos históricos, generando demo...');
-            return this.generateDemoHistoricalData(this.currentCoin);
+            console.log('📊 Generando datos históricos simulados...');
+            return this.generateSmartHistoricalData(currentPrice);
         }
 
         try {
             const prices = chartData.prices;
             console.log(`📈 Procesando ${prices.length} puntos históricos`);
 
-            // Limitar a máximo 100 puntos para mejor rendimiento
-            const maxPoints = 100;
+            // ESTRATEGIA MEJORADA: Limitar datos más agresivamente
+            const maxPoints = 50; // Reducir a 50 puntos máximo
             let processedData = [];
 
             if (prices.length > maxPoints) {
-                const step = Math.ceil(prices.length / maxPoints);
+                const step = Math.floor(prices.length / maxPoints);
                 processedData = prices
                     .filter((_, index) => index % step === 0)
+                    .slice(0, maxPoints)
                     .map(([timestamp, price]) => this.createOHLCEntry(timestamp, price));
             } else {
                 processedData = prices.map(([timestamp, price]) =>
@@ -700,8 +742,41 @@ class CryptoDashboard {
 
         } catch (error) {
             console.error('Error procesando datos históricos:', error);
-            return this.generateDemoHistoricalData(this.currentCoin);
+            return this.generateSmartHistoricalData(currentPrice);
         }
+    }
+
+    // Generar datos históricos más inteligentes basados en el precio actual
+    generateSmartHistoricalData(currentPrice = 1000) {
+        const data = [];
+        const now = Date.now();
+        const volatility = 0.03; // 3% de volatilidad
+
+        // Generar 30 puntos de datos
+        for (let i = 30; i >= 0; i--) {
+            const timestamp = new Date(now - i * 86400000).toISOString();
+
+            // Crear tendencia más realista basada en el precio actual
+            const trendFactor = 1 + (Math.random() - 0.5) * 0.1; // ±5% de tendencia
+            const basePrice = currentPrice * (1 - (i * 0.01)) * trendFactor; // Tendencia suave
+
+            const open = basePrice;
+            const close = basePrice * (0.99 + Math.random() * 0.02);
+            const high = Math.max(open, close) * (1 + Math.random() * volatility);
+            const low = Math.min(open, close) * (1 - Math.random() * volatility);
+
+            data.push({
+                timestamp: timestamp,
+                open: open,
+                high: high,
+                low: low,
+                close: close,
+                volume: Math.random() * 1000000
+            });
+        }
+
+        console.log(`📊 Generados ${data.length} puntos históricos simulados`);
+        return data;
     }
 
     createOHLCEntry(timestamp, price) {
@@ -749,7 +824,7 @@ class CryptoDashboard {
         }
     }
 
-    async fetchWithTimeout(url, timeout = 15000) {
+    async fetchWithTimeout(url, timeout = 5000) {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -764,17 +839,11 @@ class CryptoDashboard {
             });
 
             clearTimeout(timeoutId);
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
             return response;
         } catch (error) {
             clearTimeout(timeoutId);
             if (error.name === 'AbortError') {
-                console.warn(`⏰ Timeout después de ${timeout}ms: ${url}`);
-                throw new Error(`Timeout: No se pudo cargar ${url} en ${timeout}ms`);
+                throw new Error(`Timeout después de ${timeout}ms`);
             }
             throw error;
         }
@@ -1359,22 +1428,22 @@ class CryptoDashboard {
         }
 
         try {
-            console.log("🔄 Ejecutando actualización automática...");
+            console.log("🔄 Actualización automática...");
 
-            // Actualizar solo datos esenciales, de forma secuencial para evitar conflictos
-            await this.loadGlobalMetrics();
+            // ESTRATEGIA MEJORADA: Actualizar solo datos críticos
+            const refreshPromises = [
+                this.loadGlobalMetrics().catch(e => console.warn('Error global metrics:', e.message)),
+                this.loadCoinDataOptimized(this.currentCoin, 7).catch(e => console.warn('Error coin data:', e.message)) // Reducir días para refresh
+            ];
 
-            // Pequeña pausa entre requests
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            await this.loadCoinDataOptimized(this.currentCoin, 30);
+            await Promise.allSettled(refreshPromises);
 
             this.updateLastUpdatedTime();
             console.log("✅ Actualización automática completada");
 
         } catch (error) {
             console.warn('⚠️ Error en actualización automática:', error.message);
-            // No detener el auto-refresh por errores individuales
+            // Continuar normalmente, no reintentar
         }
     }
 
@@ -1463,63 +1532,71 @@ class CryptoDashboard {
 
     // PRECARGA OPTIMIZADA
     async preloadPopularCoins() {
-        console.log("🔮 Precargando datos esenciales...");
+        console.log("🔮 Intentando precargar datos...");
 
-        const preloadPromises = this.essentialCoins
-            .filter(coin => coin !== this.currentCoin)
-            .map(async (coin, index) => {
-                // Espaciar requests para evitar sobrecarga
-                await new Promise(resolve => setTimeout(resolve, index * 2000));
+        try {
+            const coinIds = this.essentialCoins.filter(coin => coin !== this.currentCoin).join(',');
 
-                try {
-                    console.log(`🔍 Precargando: ${coin}`);
-                    const response = await this.fetchWithRetry(
-                        `/api/v1/coins/markets?vs_currency=usd&ids=${coin}&per_page=1&page=1`,
-                        8000,
-                        2 // Solo 2 reintentos para precarga
-                    );
+            if (!coinIds) {
+                console.log("⏭️ No hay monedas para precargar");
+                return;
+            }
 
-                    if (response.ok) {
-                        const data = await response.json();
-                        if (Array.isArray(data) && data.length > 0) {
-                            this.setCachedData(`coin_${coin}_simple`, data[0], 300000);
-                            console.log(`✅ Precargado: ${coin}`);
-                        }
-                    }
-                } catch (error) {
-                    console.log(`❌ Error precargando ${coin}:`, error.message);
-                    // No hacer nada, solo continuar con la siguiente
-                }
-            });
+            // Intentar precarga con timeout muy corto
+            const response = await this.fetchWithTimeout(
+                `/api/v1/coins/markets?vs_currency=usd&ids=${coinIds}&per_page=5&page=1`,
+                3000 // Timeout muy corto para precarga
+            );
 
-        await Promise.allSettled(preloadPromises);
-        console.log("🎯 Precarga completada");
+            if (response.ok) {
+                const data = await response.json();
+                data.forEach(coinData => {
+                    this.setCachedData(`coin_${coinData.id}_simple`, coinData, 300000);
+                    console.log(`✅ Precargado: ${coinData.id}`);
+                });
+                console.log("🎯 Precarga exitosa");
+            }
+
+        } catch (error) {
+            console.log("ℹ️ Precarga falló - continuando sin precarga:", error.message);
+            // No hacer nada, la aplicación puede funcionar sin precarga
+        }
     }
 
-    async fetchWithRetry(url, timeout = 15000, retries = 3) {
+    async fetchWithRetry(url, timeout = 5000, retries = 1) {
         for (let attempt = 1; attempt <= retries; attempt++) {
             try {
-                console.log(`🔄 Intento ${attempt}/${retries} para: ${url}`);
+                console.log(`🔄 [${attempt}/${retries}] ${this.getUrlName(url)}`);
+
                 const response = await this.fetchWithTimeout(url, timeout);
 
                 if (response.ok) {
                     return response;
                 } else {
-                    console.warn(`❌ HTTP ${response.status} en intento ${attempt}`);
+                    console.warn(`❌ HTTP ${response.status} en ${this.getUrlName(url)}`);
+                    // Para errores HTTP, no reintentar
+                    throw new Error(`HTTP ${response.status}`);
                 }
             } catch (error) {
-                console.warn(`❌ Error en intento ${attempt}:`, error.message);
+                console.warn(`❌ Error en ${this.getUrlName(url)}:`, error.message);
 
                 if (attempt === retries) {
                     throw error;
                 }
 
-                // Esperar antes del siguiente intento (backoff exponencial)
-                const delay = 1000 * Math.pow(2, attempt - 1);
-                console.log(`⏳ Esperando ${delay}ms antes del reintento...`);
-                await new Promise(resolve => setTimeout(resolve, delay));
+                // Pequeña pausa antes del reintento
+                await new Promise(resolve => setTimeout(resolve, 500));
             }
         }
+    }
+
+    // Helper para nombres de URL más legibles
+    getUrlName(url) {
+        if (url.includes('/market_chart/')) return 'Históricos';
+        if (url.includes('/coins/markets')) return 'Mercado';
+        if (url.includes('/global')) return 'Globales';
+        if (url.includes('/health')) return 'Health Check';
+        return 'API';
     }
 
     // MANEJO DE CAMBIO DE MONEDA OPTIMIZADO
