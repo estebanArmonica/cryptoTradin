@@ -6,14 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Permissions-Policy" content="unload=(self)">
     <title>Plataforma de Trading con Retiros PayPal</title>
-    <link rel="icon" href="https://images.vexels.com/media/users/3/263037/isolated/preview/e99af4cc856407924934f9cbc0445b27-icono-de-dinero-de-criptomoneda-bitcoin.png">
+    <link rel="icon"
+        href="https://images.vexels.com/media/users/3/263037/isolated/preview/e99af4cc856407924934f9cbc0445b27-icono-de-dinero-de-criptomoneda-bitcoin.png">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <link rel="stylesheet" href="{{ url_for('static', path='/css/trading.css') }}">
     <!-- SDK de PayPal con client-id REAL -->
-    <script src="https://www.paypal.com/sdk/js?client-id=Ac6Xq9PVNP7ftJwPWrgAGxeFu17BYlCJ6YaUc6oDeEHDr_WoWAFbzvMa1LlBeWAUip1GZZZRzrTWs6Xl&components=buttons,hosted-fields&currency=USD"></script>
+    <script
+        src="https://www.paypal.com/sdk/js?client-id=Ac6Xq9PVNP7ftJwPWrgAGxeFu17BYlCJ6YaUc6oDeEHDr_WoWAFbzvMa1LlBeWAUip1GZZZRzrTWs6Xl&components=buttons,hosted-fields&currency=USD"></script>
 </head>
 
 <body>
@@ -105,11 +107,15 @@
                     <div class="chart-header">
                         <div class="chart-title">Gr&aacute;fico de Precios en Tiempo Real</div>
                         <div class="chart-controls">
-                            <button class="control-btn active">1H</button>
-                            <button class="control-btn">4H</button>
-                            <button class="control-btn">1D</button>
-                            <button class="control-btn">1S</button>
+                            <button class="control-btn active" data-interval="1h">1H</button>
+                            <button class="control-btn" data-interval="4h">4H</button>
+                            <button class="control-btn" data-interval="1d">1D</button>
+                            <button class="control-btn" data-interval="1w">1S</button>
                         </div>
+                    </div>
+                    <div class="chart-loading" id="chart-loading" style="display: none;">
+                        <div class="loading-spinner"></div>
+                        <div>Cargando datos...</div>
                     </div>
                     <canvas id="priceChart"></canvas>
                 </div>
@@ -300,7 +306,8 @@
                     </div>
 
                     <div class="text-center mb-4">
-                        <p class="text-muted mb-3">Haz clic en el botón para iniciar sesión en PayPal y autorizar el retiro</p>
+                        <p class="text-muted mb-3">Haz clic en el botón para iniciar sesión en PayPal y autorizar el
+                            retiro</p>
                         <div id="paypal-button-container"></div>
                     </div>
 
@@ -458,16 +465,16 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/crypto-trading.js"></script>
-    
+
     <script>
         // Función global requerida por crypto-trading.js
         function redirectToPaypalTransfer() {
             // Esta función será implementada en crypto-trading.js
             console.log('Redirigiendo a transferencia PayPal');
         }
-        
+
         // Inicializar la aplicación cuando el DOM esté listo
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             console.log('Plataforma de trading cargada');
         });
     </script>

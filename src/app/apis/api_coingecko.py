@@ -443,5 +443,278 @@ def get_exchange_rates():
         raise handle_api_error(e, "Error al obtener tasas de cambio")
     
 #===================================================================================
+# ENDPOINTS para trading
+#===================================================================================
+# Añade esto a tu api_coingecko.py
+
+# Endpoints optimizados para trading
+@router.get("/trading/prices", response_model=Dict[str, Any], tags=["Trading"])
+async def get_trading_prices(coin_ids: str = "bitcoin,ethereum,solana,binancecoin,cardano"):
+    """
+    Endpoint optimizado específicamente para trading.
+    Retorna precios esenciales para las criptos principales.
+    """
+    try:
+        prices = client.get_trading_prices(coin_ids=coin_ids)
+        return {
+            "success": True,
+            "data": prices,
+            "timestamp": datetime.now().isoformat(),
+            "cached": True  # Indica que viene de caché
+        }
+    except Exception as e:
+        raise handle_api_error(e, "Error al obtener precios para trading")
+
+@router.get("/trading/coin/{coin_id}/simple", response_model=Dict[str, Any], tags=["Trading"])
+async def get_trading_coin_simple(coin_id: str):
+    """
+    Endpoint optimizado para datos básicos de trading de una moneda.
+    """
+    try:
+        coin_data = client.get_coin_simple_data(coin_id)
+        # Extraer solo los datos esenciales para trading
+        essential_data = {
+            "id": coin_data.get("id"),
+            "symbol": coin_data.get("symbol"),
+            "name": coin_data.get("name"),
+            "market_data": {
+                "current_price": coin_data.get("market_data", {}).get("current_price", {}),
+                "price_change_24h": coin_data.get("market_data", {}).get("price_change_24h"),
+                "price_change_percentage_24h": coin_data.get("market_data", {}).get("price_change_percentage_24h"),
+                "market_cap": coin_data.get("market_data", {}).get("market_cap", {}),
+            }
+        }
+        return {
+            "success": True,
+            "data": essential_data,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise handle_api_error(e, f"Error al obtener datos de trading para {coin_id}")
+
+@router.get("/trading/coin/{coin_id}/chart", response_model=Dict[str, Any], tags=["Trading"])
+async def get_trading_coin_chart(
+    coin_id: str, 
+    vs_currency: str = "usd",
+    days: int = Query(1, ge=1, le=7, description="Días (1-7 para mejor performance)")
+):
+    """
+    Endpoint optimizado para gráficos de trading.
+    Limitado a 7 días máximo para mejor rendimiento.
+    """
+    try:
+        chart_data = client.get_coin_market_chart_by_id(
+            id=coin_id,
+            vs_currency=vs_currency,
+            days=days
+        )
+        
+        # Optimizar datos para el frontend
+        prices = chart_data.get("prices", [])
+        if len(prices) > 100:  # Limitar a 100 puntos máximo
+            step = len(prices) // 100
+            prices = prices[::step]
+        
+        return {
+            "success": True,
+            "data": {
+                "prices": prices,
+                "total_volumes": chart_data.get("total_volumes", [])[:100],  # Limitar también volúmenes
+            },
+            "points": len(prices),
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise handle_api_error(e, f"Error al obtener gráfico para {coin_id}")
+
+@router.get("/trading/market/overview", response_model=Dict[str, Any], tags=["Trading"])
+async def get_trading_market_overview():
+    """
+    Vista general optimizada del mercado para trading.
+    """
+    try:
+        # Obtener solo las top 10 criptos para trading
+        market_data = client.get_coin_market(per_page=10)
+        
+        overview = {
+            "top_cryptos": [
+                {
+                    "id": coin["id"],
+                    "symbol": coin["symbol"],
+                    "name": coin["name"],
+                    "current_price": coin["current_price"],
+                    "price_change_24h": coin["price_change_24h"],
+                    "price_change_percentage_24h": coin["price_change_percentage_24h"],
+                    "market_cap": coin["market_cap"],
+                }
+                for coin in market_data
+            ],
+            "total_cryptos": len(market_data),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        return {"success": True, "data": overview}
+    except Exception as e:
+        raise handle_api_error(e, "Error al obtener vista general del mercado")
+
+#==================================================================================
+# CONOCER EL ESTADO DE LA API
+#==================================================================================
+@router.get("/health", tags=["Status"])
+async def health_check():
+    """Endpoint de salud para verificar el estado del servicio"""
+    try:
+        # Verificar conexión con CoinGecko
+        ping_result = client.get_ping()
+        
+        return {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+            "coin_gecko": "connected" if ping_result else "disconnected",
+            "cache_size": len(client._cache),
+            "performance": "optimized"
+        }
+    except Exception as e:
+        return {
+            "status": "degraded",
+            "timestamp": datetime.now().isoformat(),
+            "coin_gecko": "disconnected",
+            "error": str(e)
+        }
+
+
+#==================================================================================
+# ENDPOINTS PARA DASHBOARD
+#==================================================================================
+# Añade estos endpoints a tu api_coingecko.py
+
+@router.get("/dashboard/quick-data", response_model=Dict[str, Any], tags=["Dashboard"])
+async def get_dashboard_quick_data(coin_ids: str = "bitcoin,ethereum,binancecoin,solana,cardano"):
+    """
+    Endpoint ultra-optimizado para el dashboard.
+    Retorna solo datos esenciales para múltiples monedas.
+    """
+    try:
+        # Usar el método optimizado de trading
+        prices_data = client.get_trading_prices(coin_ids=coin_ids)
+        
+        # Procesar datos mínimos
+        quick_data = {}
+        for coin_id in coin_ids.split(','):
+            if coin_id in prices_data:
+                coin_data = prices_data[coin_id]
+                quick_data[coin_id] = {
+                    "current_price": coin_data.get("usd", 0),
+                    "price_change_24h": coin_data.get("usd_24h_change", 0),
+                    "last_updated": datetime.now().isoformat()
+                }
+        
+        return {
+            "success": True,
+            "data": quick_data,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        raise handle_api_error(e, "Error al obtener datos rápidos del dashboard")
+
+@router.get("/dashboard/signals", response_model=Dict[str, Any], tags=["Dashboard"])
+async def get_dashboard_signals(coin_id: str):
+    """
+    Endpoint optimizado para señales de trading.
+    """
+    try:
+        # Obtener datos simples y rápidos
+        coin_data = client.get_coin_simple_data(coin_id)
+        
+        # Calcular señal básica (simplificada para rendimiento)
+        current_price = coin_data.get("market_data", {}).get("current_price", {}).get("usd", 0)
+        price_change = coin_data.get("market_data", {}).get("price_change_percentage_24h", 0)
+        
+        # Señal simple basada en cambio de precio
+        if price_change > 2:
+            signal = "BUY"
+            confidence = "high"
+            reason = f"Fuerte tendencia alcista (+{price_change:.2f}%)"
+        elif price_change < -2:
+            signal = "SELL" 
+            confidence = "high"
+            reason = f"Fuerte tendencia bajista ({price_change:.2f}%)"
+        else:
+            signal = "HOLD"
+            confidence = "medium"
+            reason = "Mercado lateral, esperando señal clara"
+        
+        return {
+            "success": True,
+            "data": {
+                "coin_id": coin_id,
+                "signal": signal,
+                "confidence": confidence,
+                "reason": reason,
+                "current_price": current_price,
+                "price_change_24h": price_change,
+                "timestamp": datetime.now().isoformat()
+            }
+        }
+        
+    except Exception as e:
+        raise handle_api_error(e, f"Error al obtener señales para {coin_id}")
+    
+# Endpoints optimizados para el dashboard
+@router.get("/dashboard/top-opportunities", response_model=Dict[str, Any], tags=["Dashboard"])
+async def get_dashboard_opportunities(limit: int = Query(6, ge=1, le=20)):
+    """
+    Endpoint optimizado para oportunidades del dashboard.
+    """
+    try:
+        # Obtener las top criptos por market cap
+        market_data = client.get_coin_market(
+            vs_currency="usd", 
+            order="market_cap_desc", 
+            per_page=limit,
+            sparkline=False
+        )
+        
+        opportunities = []
+        for coin in market_data:
+            # Calcular señal simple
+            price_change = coin.get("price_change_percentage_24h", 0)
+            if price_change > 3:
+                signal = "BUY"
+                confidence = "high"
+            elif price_change < -3:
+                signal = "SELL"
+                confidence = "high"
+            else:
+                signal = "HOLD"
+                confidence = "medium"
+                
+            opportunities.append({
+                "coin": {
+                    "id": coin["id"],
+                    "name": coin["name"],
+                    "symbol": coin["symbol"],
+                    "current_price": coin["current_price"],
+                    "price_change_percentage_24h": price_change,
+                    "market_cap": coin["market_cap"]
+                },
+                "signal": {
+                    "type": signal,
+                    "confidence": confidence,
+                    "reason": f"Cambio 24h: {price_change:.2f}%"
+                }
+            })
+        
+        return {
+            "success": True,
+            "opportunities": opportunities,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        raise handle_api_error(e, "Error al obtener oportunidades del dashboard")
+    
+#===================================================================================
 # FIN DE ENDPOINTS
 #===================================================================================

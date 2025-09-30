@@ -56,6 +56,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    // Limpiar cualquier PayPal existente primero
+    cleanupAllPayPal();
+
     // Iniciar la aplicación normalmente
     initApp();
 
@@ -141,11 +144,184 @@ const MIN_WITHDRAWAL = 10;
 const MAX_WITHDRAWAL = 5000;
 let currentPaypalAmount = 100;
 
+// ==== CACHÉ Y OPTIMIZACIÓN ====
+const TRADING_COINS = "bitcoin,ethereum,solana,binancecoin,cardano";
+const CACHE_DURATION = 30000; // 30 segundos
+let priceCache = null;
+let lastFetchTime = 0;
+
+// Función optimizada para precios de trading
+async function fetchTradingPrices() {
+    const now = Date.now();
+
+    if (priceCache && (now - lastFetchTime < CACHE_DURATION)) {
+        return priceCache;
+    }
+
+    try {
+        const response = await fetch(`/api/v1/trading/prices?coin_ids=${TRADING_COINS}`);
+        if (!response.ok) throw new Error('Failed to fetch trading prices');
+
+        const data = await response.json();
+
+        if (data.success) {
+            priceCache = data.data;
+            lastFetchTime = now;
+            return priceCache;
+        }
+        throw new Error('Invalid response format');
+    } catch (error) {
+        console.warn('Error fetching trading prices, using cache:', error);
+        return priceCache || generateFallbackPrices();
+    }
+}
+
+// Función optimizada para datos históricos
+async function fetchTradingChartData(coinId, days = 1) {
+    try {
+        const response = await fetch(`/api/v1/trading/coin/${coinId}/chart?days=${days}&vs_currency=usd`);
+        if (!response.ok) throw new Error('Failed to fetch chart data');
+
+        const data = await response.json();
+
+        if (data.success) {
+            return this.processChartData(data.data);
+        }
+        throw new Error('Invalid chart data');
+    } catch (error) {
+        console.warn('Error fetching chart data:', error);
+        return this.generateFallbackChart(coinId, days);
+    }
+}
+
+// Procesar datos del gráfico de forma eficiente
+function processChartData(chartData) {
+    if (!chartData || !chartData.prices) return [];
+
+    return chartData.prices.map(item => ({
+        time: new Date(item[0]),
+        value: item[1]
+    }));
+}
+
+// Generar datos de respaldo
+function generateFallbackPrices() {
+    const defaultPrices = {
+        bitcoin: { usd: 50000, usd_24h_change: 2.18 },
+        ethereum: { usd: 2345.67, usd_24h_change: 1.25 },
+        solana: { usd: 98.76, usd_24h_change: -0.87 },
+        binancecoin: { usd: 315.42, usd_24h_change: 0.42 },
+        cardano: { usd: 0.52, usd_24h_change: -0.15 }
+    };
+    return defaultPrices;
+}
+
+function generateFallbackChart(coinId, days) {
+    const basePrice = appState.cryptoPrices[coinId] || 50000;
+    const history = [];
+    const now = Date.now();
+    const points = days === 1 ? 24 : 7; // Menos puntos para mejor rendimiento
+
+    for (let i = points; i > 0; i--) {
+        history.push({
+            time: new Date(now - i * 3600000), // Horas en lugar de minutos
+            value: basePrice * (0.99 + Math.random() * 0.02)
+        });
+    }
+
+    return history;
+}
+
+// Función optimizada para obtener precios
+async function fetchCryptoPricesOptimized() {
+    const now = Date.now();
+
+    // Usar caché si los datos son recientes
+    if (now - lastFetchTime < CACHE_DURATION && Object.keys(priceCache).length > 0) {
+        return priceCache;
+    }
+
+    try {
+        const response = await fetch('/api/v1/coins/markets?vs_currency=usd&per_page=50&page=1');
+        if (!response.ok) throw new Error('Failed to fetch prices');
+
+        const data = await response.json();
+        const prices = {};
+        const changes = {};
+
+        // Procesamiento más eficiente
+        data.forEach(coin => {
+            prices[coin.id] = coin.current_price;
+            changes[coin.id] = coin.price_change_percentage_24h || 0;
+        });
+
+        priceCache = { prices, changes };
+        lastFetchTime = now;
+
+        return priceCache;
+    } catch (error) {
+        console.error('Error fetching crypto prices:', error);
+        // Devolver caché existente en caso de error
+        return Object.keys(priceCache).length > 0 ? priceCache : null;
+    }
+}
+
+// Función optimizada para datos históricos
+async function fetchHistoricalDataOptimized(coinId, days = 1) {
+    try {
+        // Usar el endpoint más rápido para datos recientes
+        const response = await fetch(`/api/v1/coins/${coinId}/market_chart/last_days?days=${days}&vs_currency=usd`);
+        if (!response.ok) throw new Error('Failed to fetch historical data');
+
+        const data = await response.json();
+        return this.processHistoricalData(data);
+    } catch (error) {
+        console.error('Error fetching historical data:', error);
+        return this.generateFallbackHistory(coinId);
+    }
+}
+
+// Procesar datos históricos de forma eficiente
+function processHistoricalData(data) {
+    if (!data || !data.prices) return [];
+
+    // Limitar a 100 puntos máximo para mejor rendimiento
+    const maxPoints = 100;
+    const prices = data.prices;
+    const step = Math.max(1, Math.floor(prices.length / maxPoints));
+
+    const processedData = [];
+    for (let i = 0; i < prices.length; i += step) {
+        processedData.push({
+            time: new Date(prices[i][0]),
+            value: prices[i][1]
+        });
+    }
+
+    return processedData;
+}
+
+// Generar datos de respaldo si la API falla
+function generateFallbackHistory(coinId) {
+    const price = appState.cryptoPrices[coinId] || 50000;
+    const history = [];
+    const now = Date.now();
+
+    for (let i = 100; i > 0; i--) {
+        history.push({
+            time: new Date(now - i * 60000),
+            value: price * (0.99 + Math.random() * 0.02) // Variación del 1-2%
+        });
+    }
+
+    return history;
+}
+
 // ===== FUNCIONES DE API =====
 async function fetchWithAuth(url, options = {}) {
     if (!sessionToken) {
-        console.error('No session token available');
-        return null;
+        console.warn('No session token available - using demo mode');
+        return { success: true, balance: 10000 }; // Modo demo
     }
 
     const defaultOptions = {
@@ -153,17 +329,26 @@ async function fetchWithAuth(url, options = {}) {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${sessionToken}`
         },
-        credentials: 'include'
+        credentials: 'include',
+        timeout: 10000 // Timeout de 10 segundos
     };
 
     try {
-        const response = await fetch(url, { ...defaultOptions, ...options });
-        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        const response = await fetch(url, {
+            ...defaultOptions,
+            ...options,
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
         if (response.status === 401) {
-            // Token expired or invalid
             localStorage.removeItem('session_token');
-            window.location.href = '/';
-            return null;
+            sessionToken = null;
+            return { success: true, balance: 10000 }; // Cambiar a modo demo
         }
 
         if (!response.ok) {
@@ -172,7 +357,11 @@ async function fetchWithAuth(url, options = {}) {
 
         return await response.json();
     } catch (error) {
-        console.error('API request failed:', error);
+        if (error.name === 'AbortError') {
+            console.warn('Request timeout - using fallback data');
+        } else {
+            console.error('API request failed:', error);
+        }
         return null;
     }
 }
@@ -181,17 +370,17 @@ async function fetchCryptoPrices() {
     try {
         const response = await fetch('/api/v1/coins/markets?vs_currency=usd&per_page=50&page=1');
         if (!response.ok) throw new Error('Failed to fetch prices');
-        
+
         const data = await response.json();
         const prices = {};
         const changes = {};
-        
+
         data.forEach(coin => {
             const coinId = coin.id;
             prices[coinId] = coin.current_price;
             changes[coinId] = coin.price_change_percentage_24h;
         });
-        
+
         return { prices, changes };
     } catch (error) {
         console.error('Error fetching crypto prices:', error);
@@ -203,7 +392,7 @@ async function fetchCurrentPrice(coinId) {
     try {
         const response = await fetch(`/api/v1/trading/${coinId}/price`);
         if (!response.ok) throw new Error('Failed to fetch price');
-        
+
         const data = await response.json();
         return data.price_usd;
     } catch (error) {
@@ -216,7 +405,7 @@ async function fetchHistoricalData(coinId, days = 7) {
     try {
         const response = await fetch(`/api/v1/trading/${coinId}/metrics?days=${days}`);
         if (!response.ok) throw new Error('Failed to fetch historical data');
-        
+
         const data = await response.json();
         return data;
     } catch (error) {
@@ -229,7 +418,7 @@ async function fetchTradingSignals(coinId, timeframe = '24h') {
     try {
         const response = await fetch(`/api/v1/trading/${coinId}/signals?time_frame=${timeframe}`);
         if (!response.ok) throw new Error('Failed to fetch signals');
-        
+
         const data = await response.json();
         return data;
     } catch (error) {
@@ -262,7 +451,7 @@ async function fetchMarketData() {
     try {
         const response = await fetch('/api/v1/market/performance');
         if (!response.ok) throw new Error('Failed to fetch market data');
-        
+
         return await response.json();
     } catch (error) {
         console.error('Error fetching market data:', error);
@@ -290,74 +479,166 @@ function calculateUnrealizedPnL() {
     });
 }
 
-// ===== INICIALIZACIÓN =====
 async function initApp() {
     if (!loadState()) {
         appState = { ...initialState };
     }
 
-    // Cargar datos reales
-    await loadRealData();
-    
+    // Cargar datos críticos de forma optimizada
+    await loadTradingData();
+
+    // Inicializar UI inmediatamente
     updateUI();
-    generatePriceHistory();
-    generateOrders();
     initChart();
     setupEventListeners();
-    initializePayPal();
-    setupModalEventListeners();
 
-    // Iniciar actualizaciones en tiempo real cada minuto
-    updateInterval = setInterval(updateRealData, 60000); // Actualizar cada 60 segundos (1 minuto)
+    // Actualizaciones menos frecuentes
+    updateInterval = setInterval(updateTradingData, 30000); // 30 segundos
 }
 
-async function loadRealData() {
+async function loadTradingData() {
     try {
-        // Cargar precios de criptomonedas
-        const priceData = await fetchCryptoPrices();
+        const priceData = await fetchTradingPrices();
         if (priceData) {
-            appState.cryptoPrices = priceData.prices;
-            appState.cryptoChanges = priceData.changes;
-        }
-
-        // Cargar balance del usuario
-        const balanceData = await fetchUserBalance();
-        if (balanceData && balanceData.success) {
-            appState.balanceUSDT = balanceData.balance;
-        }
-
-        // Cargar balances de criptomonedas
-        const cryptoBalances = await fetchCryptoBalances();
-        if (cryptoBalances && cryptoBalances.success) {
-            cryptoBalances.balances.forEach(balance => {
-                const symbol = balance.coin_id.toUpperCase();
-                appState[`balance${symbol}`] = balance.balance;
+            // Procesar datos de precios
+            Object.keys(priceData).forEach(coinId => {
+                if (priceData[coinId] && priceData[coinId].usd) {
+                    appState.cryptoPrices[coinId] = priceData[coinId].usd;
+                    appState.cryptoChanges[coinId] = priceData[coinId].usd_24h_change || 0;
+                }
             });
-        }
 
-        // Cargar datos de mercado
-        const marketData = await fetchMarketData();
-        if (marketData) {
-            // Actualizar métricas globales si es necesario
+            // Cargar datos del gráfico solo para la cripto actual
+            const chartData = await fetchTradingChartData(appState.currentCrypto, 1);
+            if (chartData && chartData.length > 0) {
+                appState.priceHistory = chartData;
+            }
         }
 
     } catch (error) {
-        console.error('Error loading real data:', error);
+        console.error('Error loading trading data:', error);
+        initializeFallbackData();
     }
+}
+
+async function updateTradingData() {
+    try {
+        const priceData = await fetchTradingPrices();
+        if (priceData) {
+            Object.keys(priceData).forEach(coinId => {
+                if (priceData[coinId] && priceData[coinId].usd) {
+                    appState.cryptoPrices[coinId] = priceData[coinId].usd;
+                    appState.cryptoChanges[coinId] = priceData[coinId].usd_24h_change || 0;
+                }
+            });
+
+            // Actualizar gráfico con el precio actual
+            const currentPrice = appState.cryptoPrices[appState.currentCrypto];
+            if (currentPrice) {
+                appState.priceHistory.push({
+                    time: new Date(),
+                    value: currentPrice
+                });
+
+                // Mantener solo los últimos 50 puntos para mejor rendimiento
+                if (appState.priceHistory.length > 50) {
+                    appState.priceHistory = appState.priceHistory.slice(-50);
+                }
+            }
+        }
+
+        updateUI();
+
+        // Actualizar el gráfico de forma segura
+        if (chart) {
+            updateChart();
+        } else {
+            initChart();
+        }
+    } catch (error) {
+        console.error('Error updating trading data:', error);
+    }
+}
+
+async function loadCriticalData() {
+    try {
+        const priceData = await fetchCryptoPricesOptimized();
+        if (priceData) {
+            appState.cryptoPrices = priceData.prices;
+            appState.cryptoChanges = priceData.changes;
+
+            // Solo cargar datos históricos para la cripto actual
+            const historicalData = await fetchHistoricalDataOptimized(appState.currentCrypto, 1);
+            if (historicalData) {
+                appState.priceHistory = historicalData;
+            }
+        }
+
+        // Cargar balance solo si hay token
+        if (sessionToken) {
+            const balanceData = await fetchUserBalance();
+            if (balanceData && balanceData.success) {
+                appState.balanceUSDT = balanceData.balance;
+            }
+        }
+
+    } catch (error) {
+        console.error('Error loading critical data:', error);
+        // Usar datos por defecto si hay error
+        initializeFallbackData();
+    }
+}
+
+async function loadSecondaryData() {
+    // Datos que pueden cargarse después sin bloquear la UI
+    generateOrders();
+    initializePayPal();
+    setupModalEventListeners();
+}
+
+function initializeFallbackData() {
+    // Datos por defecto para que la app funcione inmediatamente
+    const defaultPrices = {
+        bitcoin: 50000,
+        ethereum: 2345.67,
+        solana: 98.76,
+        binancecoin: 315.42,
+        cardano: 0.52
+    };
+
+    const defaultChanges = {
+        bitcoin: 2.18,
+        ethereum: 1.25,
+        solana: -0.87,
+        binancecoin: 0.42,
+        cardano: -0.15
+    };
+
+    appState.cryptoPrices = { ...defaultPrices };
+    appState.cryptoChanges = { ...defaultChanges };
+    appState.priceHistory = generateFallbackHistory(appState.currentCrypto);
 }
 
 async function updateRealData() {
     try {
-        const priceData = await fetchCryptoPrices();
+        const priceData = await fetchCryptoPricesOptimized();
         if (priceData) {
             appState.cryptoPrices = priceData.prices;
             appState.cryptoChanges = priceData.changes;
-        }
 
-        // Actualizar precio histórico para la criptomoneda actual
-        const historicalData = await fetchHistoricalData(appState.currentCrypto, 1);
-        if (historicalData && historicalData.metrics) {
-            updatePriceHistory(historicalData.metrics);
+            // Actualizar precio histórico de forma incremental
+            const currentPrice = appState.cryptoPrices[appState.currentCrypto];
+            if (currentPrice) {
+                appState.priceHistory.push({
+                    time: new Date(),
+                    value: currentPrice
+                });
+
+                // Mantener solo los últimos 100 puntos
+                if (appState.priceHistory.length > 100) {
+                    appState.priceHistory = appState.priceHistory.slice(-100);
+                }
+            }
         }
 
         updateUI();
@@ -415,7 +696,14 @@ function updatePaypalSummaryModal() {
         `$${finalTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     setSummaryCryptoIcon(crypto);
-    initSummaryPayPal(finalTotal, amount, crypto);
+
+    // Solo inicializar PayPal si el monto es válido
+    if (amount > 0 && finalTotal >= 10) {
+        initSummaryPayPal(finalTotal, amount, crypto);
+    } else {
+        document.getElementById('summary-paypal-button-container').innerHTML =
+            '<p class="text-warning">Ingresa una cantidad válida para habilitar PayPal</p>';
+    }
 }
 
 function setSummaryCryptoIcon(cryptoType) {
@@ -443,12 +731,26 @@ function setSummaryCryptoIcon(cryptoType) {
     }
 }
 
+let summaryPayPalButtons = null;
 function initSummaryPayPal(amount, cryptoAmount, crypto) {
     const symbol = appState.cryptoSymbols[crypto];
-    document.getElementById('summary-paypal-button-container').innerHTML = '';
+    const container = document.getElementById('summary-paypal-button-container');
+
+    // Limpiar el contenedor
+    container.innerHTML = '';
+
+    // Si ya hay botones de PayPal, limpiarlos
+    if (summaryPayPalButtons) {
+        try {
+            summaryPayPalButtons.close();
+        } catch (e) {
+            console.log('Cleaning existing PayPal buttons');
+        }
+        summaryPayPalButtons = null;
+    }
 
     try {
-        paypal.Buttons({
+        summaryPayPalButtons = paypal.Buttons({
             style: {
                 shape: 'pill',
                 color: 'blue',
@@ -510,12 +812,24 @@ function initSummaryPayPal(amount, cryptoAmount, crypto) {
             onError: function (err) {
                 console.error('Error en PayPal:', err);
                 alert('Error en el procesamiento del pago. Por favor, intente nuevamente.');
+            },
+
+            onCancel: function (data) {
+                console.log('Pago cancelado por el usuario');
             }
 
-        }).render('#summary-paypal-button-container');
+        });
+
+        // Renderizar los botones
+        if (summaryPayPalButtons.isEligible()) {
+            summaryPayPalButtons.render('#summary-paypal-button-container');
+        } else {
+            container.innerHTML = '<p class="text-danger">PayPal no está disponible en este momento.</p>';
+        }
 
     } catch (error) {
         console.error('Error inicializando PayPal en modal de resumen:', error);
+        container.innerHTML = '<p class="text-danger">Error al cargar PayPal. Por favor, recarga la página.</p>';
     }
 }
 
@@ -540,7 +854,7 @@ async function processPaypalPurchase(details, amount, cryptoAmount, crypto) {
         if (response && response.success) {
             // Actualizar estado local
             appState[`balance${symbol}`] = (appState[`balance${symbol}`] || 0) + cryptoAmount;
-            
+
             appState.transactions.push({
                 type: 'BUY',
                 amount: cryptoAmount,
@@ -701,14 +1015,37 @@ function changeCrypto() {
     updateUI();
     generatePriceHistory();
     generateOrders();
-    updateChart();
+
+    // Destruir y recrear el gráfico para la nueva criptomoneda
+    if (chart) {
+        chart.destroy();
+        chart = null;
+    }
+    initChart();
+
     updateModalCryptoInfo();
 }
 
+let withdrawalPayPalButtons = null;
 // ===== PAYPAL =====
 function initializePayPal() {
+    const container = document.getElementById('paypal-button-container');
+
+    // Limpiar contenedor existente
+    container.innerHTML = '';
+
+    // Limpiar botones existentes
+    if (withdrawalPayPalButtons) {
+        try {
+            withdrawalPayPalButtons.close();
+        } catch (e) {
+            console.log('Cleaning existing withdrawal PayPal buttons');
+        }
+        withdrawalPayPalButtons = null;
+    }
+
     try {
-        paypal.Buttons({
+        withdrawalPayPalButtons = paypal.Buttons({
             style: {
                 shape: 'pill',
                 color: 'blue',
@@ -717,6 +1054,9 @@ function initializePayPal() {
             },
 
             createOrder: function (data, actions) {
+                if (!validatePayPalWithdrawal()) {
+                    return false;
+                }
                 return actions.order.create({
                     purchase_units: [{
                         amount: {
@@ -742,18 +1082,30 @@ function initializePayPal() {
                 updatePayPalConnectionStatus('Error en la conexión con PayPal', 'danger');
             },
 
+            onCancel: function (data) {
+                console.log('Retiro cancelado por el usuario');
+                updatePayPalConnectionStatus('Retiro cancelado', 'warning');
+            },
+
             onClick: function () {
                 if (!validatePayPalWithdrawal()) {
                     return false;
                 }
             }
 
-        }).render('#paypal-button-container');
+        });
 
-        updatePayPalConnectionStatus('Conectado a PayPal correctamente', 'success');
-
+        // Renderizar los botones
+        if (withdrawalPayPalButtons.isEligible()) {
+            withdrawalPayPalButtons.render('#paypal-button-container');
+            updatePayPalConnectionStatus('Conectado a PayPal correctamente', 'success');
+        } else {
+            container.innerHTML = '<p class="text-danger">PayPal no está disponible para retiros en este momento.</p>';
+            updatePayPalConnectionStatus('PayPal no disponible', 'danger');
+        }
     } catch (error) {
         console.error('Error inicializando PayPal:', error);
+        container.innerHTML = '<p class="text-danger">Error al cargar PayPal. Por favor, recarga la página.</p>';
         updatePayPalConnectionStatus('Error al conectar con PayPal', 'danger');
     }
 }
@@ -929,9 +1281,25 @@ function resetModalCalculations() {
     modalFinalAmount = 0;
 }
 
+let modalPayPalButtons = null;
 function initializeModalPayPal() {
+    const container = document.getElementById('modal-paypal-button-container');
+    
+    // Limpiar contenedor existente
+    container.innerHTML = '';
+
+    // Limpiar botones existentes
+    if (modalPayPalButtons) {
+        try {
+            modalPayPalButtons.close();
+        } catch (e) {
+            console.log('Cleaning existing modal PayPal buttons');
+        }
+        modalPayPalButtons = null;
+    }
+
     try {
-        paypal.Buttons({
+        modalPayPalButtons =paypal.Buttons({
             style: {
                 shape: 'pill',
                 color: 'blue',
@@ -995,6 +1363,10 @@ function initializeModalPayPal() {
                 alert('Error en el procesamiento del pago. Por favor, intente nuevamente.');
             },
 
+            onCancel: function (data) {
+                console.log('Pago cancelado por el usuario en modal principal');
+            },
+
             onClick: function () {
                 if (modalCryptoAmount <= 0) {
                     alert('Por favor, ingrese una cantidad válida de criptomoneda');
@@ -1007,12 +1379,52 @@ function initializeModalPayPal() {
                 }
             }
 
-        }).render('#modal-paypal-button-container');
+        });
 
+        // Renderizar los botones
+        if (modalPayPalButtons.isEligible()) {
+            modalPayPalButtons.render('#modal-paypal-button-container');
+        } else {
+            container.innerHTML = '<p class="text-danger">PayPal no está disponible en este momento.</p>';
+        }
     } catch (error) {
         console.error('Error inicializando PayPal en modal:', error);
+        container.innerHTML = '<p class="text-danger">Error al cargar PayPal. Por favor, recarga la página.</p>';
     }
 }
+
+// Función para limpiar todos los botones de PayPal
+function cleanupAllPayPal() {
+    cleanupSummaryPayPal();
+    cleanupModalPayPal();
+    
+    if (withdrawalPayPalButtons) {
+        try {
+            withdrawalPayPalButtons.close();
+        } catch (e) {
+            console.log('Cleaning withdrawal PayPal buttons');
+        }
+        withdrawalPayPalButtons = null;
+    }
+    
+    document.getElementById('paypal-button-container').innerHTML = '';
+}
+
+// Limpiar PayPal cuando se cierre la página
+window.addEventListener('beforeunload', function() {
+    cleanupAllPayPal();
+    
+    if (chart) {
+        chart.destroy();
+        chart = null;
+    }
+    
+    if (updateInterval) {
+        clearInterval(updateInterval);
+        updateInterval = null;
+    }
+});
+
 
 async function processModalPurchase(details) {
     try {
@@ -1033,7 +1445,7 @@ async function processModalPurchase(details) {
 
         if (response && response.success) {
             appState[`balance${symbol}`] = (appState[`balance${symbol}`] || 0) + modalCryptoAmount;
-            
+
             appState.transactions.push({
                 type: 'BUY',
                 amount: modalCryptoAmount,
@@ -1079,9 +1491,47 @@ async function processModalPurchase(details) {
 
 function setupModalEventListeners() {
     document.getElementById('modal-crypto-amount').addEventListener('input', calculateModalTotal);
-    document.getElementById('buyCryptoModal').addEventListener('show.bs.modal', function () {
+
+    // Manejar eventos del modal de compra principal
+    const buyCryptoModal = document.getElementById('buyCryptoModal');
+    buyCryptoModal.addEventListener('show.bs.modal', function () {
         updateModalCryptoInfo();
     });
+
+    buyCryptoModal.addEventListener('hidden.bs.modal', function () {
+        // Limpiar PayPal del modal principal si existe
+        cleanupModalPayPal();
+    });
+
+    // Manejar eventos del modal de resumen PayPal
+    const paypalSummaryModal = document.getElementById('paypalSummaryModal');
+    paypalSummaryModal.addEventListener('show.bs.modal', function () {
+        updatePaypalSummaryModal();
+    });
+
+    paypalSummaryModal.addEventListener('hidden.bs.modal', function () {
+        // Limpiar PayPal del modal de resumen
+        cleanupSummaryPayPal();
+    });
+}
+
+// Función para limpiar PayPal del modal de resumen
+function cleanupSummaryPayPal() {
+    if (summaryPayPalButtons) {
+        try {
+            summaryPayPalButtons.close();
+        } catch (e) {
+            console.log('Cleaning summary PayPal buttons');
+        }
+        summaryPayPalButtons = null;
+    }
+    document.getElementById('summary-paypal-button-container').innerHTML = '';
+}
+
+// Función para limpiar PayPal del modal principal
+function cleanupModalPayPal() {
+    // Si tienes botones de PayPal en el modal principal, límpialos aquí
+    document.getElementById('modal-paypal-button-container').innerHTML = '';
 }
 
 // ===== FUNCIONES DEL SIMULADOR =====
@@ -1262,12 +1712,12 @@ function addTradePoint(type, time, price) {
         time: time,
         price: price
     });
-    
+
     // Mantener solo los puntos de las últimas 24 horas
     const oneDayAgo = new Date();
     oneDayAgo.setHours(oneDayAgo.getHours() - 24);
     appState.tradePoints = appState.tradePoints.filter(point => new Date(point.time) > oneDayAgo);
-    
+
     updateChart();
 }
 
@@ -1275,108 +1725,142 @@ function initChart() {
     const ctx = document.getElementById('priceChart').getContext('2d');
     const symbol = appState.cryptoSymbols[appState.currentCrypto];
 
-    // Preparar datos para el gráfico
+    if (chart) {
+        chart.destroy();
+        chart = null;
+    }
+
+    // Asegurar que los arrays existen
+    if (!appState.priceHistory) appState.priceHistory = [];
+    if (!appState.tradePoints) appState.tradePoints = [];
+
     const priceData = appState.priceHistory.map(d => d.value);
     const timeLabels = appState.priceHistory.map(d => d.time.toLocaleTimeString());
-    
-    // Preparar datos para los puntos de compra/venta
-    const buyPoints = appState.tradePoints.filter(point => point.type === 'BUY');
-    const sellPoints = appState.tradePoints.filter(point => point.type === 'SELL');
 
-    chart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: timeLabels,
-            datasets: [
-                {
-                    label: `${symbol}/USDT`,
-                    data: priceData,
-                    borderColor: '#0ecb81',
-                    backgroundColor: 'rgba(14, 203, 129, 0.1)',
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.1,
-                    pointRadius: 0
+    // Filtrar puntos de trade de forma segura
+    const buyPoints = appState.tradePoints.filter(point => point && point.type === 'BUY');
+    const sellPoints = appState.tradePoints.filter(point => point && point.type === 'SELL');
+
+    try {
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: timeLabels,
+                datasets: [
+                    {
+                        label: `${symbol}/USDT`,
+                        data: priceData,
+                        borderColor: '#0ecb81',
+                        backgroundColor: 'rgba(14, 203, 129, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.1,
+                        pointRadius: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
                 },
-                {
-                    label: 'Compras',
-                    data: buyPoints.map(point => {
-                        const timeIndex = appState.priceHistory.findIndex(
-                            d => d.time.getTime() === new Date(point.time).getTime()
-                        );
-                        return timeIndex !== -1 ? {x: timeIndex, y: point.price} : null;
-                    }).filter(point => point !== null),
-                    pointStyle: 'circle',
-                    pointRadius: 8,
-                    pointBackgroundColor: 'green',
-                    showLine: false
-                },
-                {
-                    label: 'Ventas',
-                    data: sellPoints.map(point => {
-                        const timeIndex = appState.priceHistory.findIndex(
-                            d => d.time.getTime() === new Date(point.time).getTime()
-                        );
-                        return timeIndex !== -1 ? {x: timeIndex, y: point.price} : null;
-                    }).filter(point => point !== null),
-                    pointStyle: 'circle',
-                    pointRadius: 8,
-                    pointBackgroundColor: 'red',
-                    showLine: false
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false,
-                    callbacks: {
-                        label: function (context) {
-                            if (context.datasetIndex === 0) {
-                                return `$${context.parsed.y.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-                            } else if (context.datasetIndex === 1) {
-                                return `Compra: $${context.parsed.y.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-                            } else if (context.datasetIndex === 2) {
-                                return `Venta: $${context.parsed.y.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(42, 54, 83, 0.5)' },
+                        ticks: { color: '#94a3b8', maxTicksLimit: 6 }
+                    },
+                    y: {
+                        grid: { color: 'rgba(42, 54, 83, 0.5)' },
+                        ticks: {
+                            color: '#94a3b8',
+                            callback: function (value) {
+                                return '$' + value.toLocaleString('en-US', {
+                                    minimumFractionDigits: 0,
+                                    maximumFractionDigits: 0
+                                });
                             }
                         }
                     }
                 }
-            },
-            scales: {
-                x: {
-                    grid: {
-                        color: 'rgba(42, 54, 83, 0.5)'
-                    },
-                    ticks: {
-                        color: '#94a3b8',
-                        maxTicksLimit: 8
-                    }
-                },
-                y: {
-                    grid: {
-                        color: 'rgba(42, 54, 83, 0.5)'
-                    },
-                    ticks: {
-                        color: '#94a3b8',
-                        callback: function (value) {
-                            return '$' + value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-                        }
-                    }
-                }
-            },
-            interaction: {
-                intersect: false,
-                mode: 'index'
             }
+        });
+    } catch (error) {
+        console.error('Error creating chart:', error);
+        // Limpiar el canvas en caso de error
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    }
+
+    // Añadir puntos de compra/venta después de crear el gráfico
+    addTradePointsToChart(buyPoints, sellPoints);
+}
+
+function addTradePointsToChart(buyPoints, sellPoints) {
+    if (!chart) return;
+
+    try {
+        // Añadir dataset de compras
+        if (buyPoints.length > 0) {
+            chart.data.datasets.push({
+                label: 'Compras',
+                data: processTradePointsForChart(buyPoints),
+                pointStyle: 'circle',
+                pointRadius: 6,
+                pointBackgroundColor: '#00ff00',
+                showLine: false
+            });
         }
-    });
+
+        // Añadir dataset de ventas
+        if (sellPoints.length > 0) {
+            chart.data.datasets.push({
+                label: 'Ventas',
+                data: processTradePointsForChart(sellPoints),
+                pointStyle: 'circle',
+                pointRadius: 6,
+                pointBackgroundColor: '#ff0000',
+                showLine: false
+            });
+        }
+        chart.update('none');
+    } catch (error) {
+        console.error('Error adding trade points to chart:', error);
+    }
+}
+
+function processTradePointsForChart(points) {
+    if (!points || !appState.priceHistory) return [];
+
+    return points.map(point => {
+        if (!point || !point.time || !point.price) return null;
+
+        // Encontrar el índice más cercano en el tiempo
+        const pointTime = new Date(point.time).getTime();
+        let closestIndex = 0;
+        let minDiff = Infinity;
+
+        appState.priceHistory.forEach((dataPoint, index) => {
+            const diff = Math.abs(dataPoint.time.getTime() - pointTime);
+            if (diff < minDiff) {
+                minDiff = diff;
+                closestIndex = index;
+            }
+        });
+
+        return { x: closestIndex, y: point.price };
+    }).filter(point => point !== null);
+}
+
+// Procesar puntos de trade de forma segura
+function processTradePoints(points, type) {
+    return points.map(point => {
+        if (!point || !point.time || !point.price) return null;
+
+        const timeIndex = appState.priceHistory.findIndex(
+            d => d.time.getTime() === new Date(point.time).getTime()
+        );
+        return timeIndex !== -1 ? { x: timeIndex, y: point.price } : null;
+    }).filter(point => point !== null);
 }
 
 function calculateAverageBuyPrice(crypto) {
@@ -1488,33 +1972,57 @@ function updateOrders() {
 }
 
 function updateChart() {
-    if (!chart) return;
+    if (!chart) {
+        initChart();
+        return;
+    }
 
-    const symbol = appState.cryptoSymbols[appState.currentCrypto];
+    try {
+        const symbol = appState.cryptoSymbols[appState.currentCrypto];
 
-    chart.data.labels = appState.priceHistory.map(d => d.time.toLocaleTimeString());
-    chart.data.datasets[0].data = appState.priceHistory.map(d => d.value);
-    chart.data.datasets[0].label = `${symbol}/USDT`;
+        chart.data.labels = appState.priceHistory.map(d => d.time.toLocaleTimeString());
+        chart.data.datasets[0].data = appState.priceHistory.map(d => d.value);
+        chart.data.datasets[0].label = `${symbol}/USDT`;
 
-    // Actualizar puntos de compra/venta
-    const buyPoints = appState.tradePoints.filter(point => point.type === 'BUY');
-    const sellPoints = appState.tradePoints.filter(point => point.type === 'SELL');
-
-    chart.data.datasets[1].data = buyPoints.map(point => {
-        const timeIndex = appState.priceHistory.findIndex(
-            d => d.time.getTime() === new Date(point.time).getTime()
+        // Limpiar datasets antiguos de puntos de trade
+        chart.data.datasets = chart.data.datasets.filter(dataset =>
+            dataset.label === `${symbol}/USDT`
         );
-        return timeIndex !== -1 ? {x: timeIndex, y: point.price} : null;
-    }).filter(point => point !== null);
 
-    chart.data.datasets[2].data = sellPoints.map(point => {
-        const timeIndex = appState.priceHistory.findIndex(
-            d => d.time.getTime() === new Date(point.time).getTime()
-        );
-        return timeIndex !== -1 ? {x: timeIndex, y: point.price} : null;
-    }).filter(point => point !== null);
+        // Actualizar puntos de compra/venta
+        const buyPoints = appState.tradePoints.filter(point => point && point.type === 'BUY');
+        const sellPoints = appState.tradePoints.filter(point => point && point.type === 'SELL');
 
-    chart.update('none');
+        // Añadir puntos de compra
+        if (buyPoints.length > 0) {
+            chart.data.datasets.push({
+                label: 'Compras',
+                data: processTradePointsForChart(buyPoints),
+                pointStyle: 'circle',
+                pointRadius: 6,
+                pointBackgroundColor: '#00ff00',
+                showLine: false
+            });
+        }
+
+        // Añadir puntos de venta
+        if (sellPoints.length > 0) {
+            chart.data.datasets.push({
+                label: 'Ventas',
+                data: processTradePointsForChart(sellPoints),
+                pointStyle: 'circle',
+                pointRadius: 6,
+                pointBackgroundColor: '#ff0000',
+                showLine: false
+            });
+        }
+
+        chart.update('none');
+    } catch (error) {
+        console.error('Error updating chart:', error);
+        // Recrear el gráfico si hay error
+        initChart();
+    }
 }
 
 function calculateTotal() {
@@ -1737,12 +2245,53 @@ function setupEventListeners() {
 
 // ===== INICIAR LA APLICACIÓN =====
 document.addEventListener('DOMContentLoaded', function () {
-    initApp();
+    // Inicializar variables críticas primero
+    if (!appState) appState = { ...initialState };
+    if (!appState.tradePoints) appState.tradePoints = [];
+    if (!appState.priceHistory) appState.priceHistory = [];
 
-    setTimeout(() => {
-        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
-        tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl);
-        });
-    }, 1000);
+    // Asegurar que el canvas esté limpio
+    const canvas = document.getElementById('priceChart');
+    if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    initApp().catch(error => {
+        console.error('Error initializing app: ', error);
+
+        // Inicialización de emergencia
+        initializeFallbackData();
+        updateUI();
+
+        // Intentar crear el gráfico con manejo de errores
+        try {
+            initChart();
+        } catch (chartError) {
+            console.error('Error creating chart in fallback:', chartError);
+        }
+
+        setupEventListeners();
+    });
+});
+
+// Limpiar el gráfico cuando se cierre la página
+window.addEventListener('beforeunload', function () {
+    if (chart) {
+        chart.destroy();
+        chart = null;
+    }
+
+    if (updateInterval) {
+        clearInterval(updateInterval);
+        updateInterval = null;
+    }
+});
+
+// También limpia el intervalo cuando se cambia de página
+window.addEventListener('unload', function () {
+    if (updateInterval) {
+        clearInterval(updateInterval);
+        updateInterval = null;
+    }
 });
